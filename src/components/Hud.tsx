@@ -70,10 +70,10 @@ export function Hud({
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 sm:p-5">
         <div className="min-w-0">
           <div className="font-display text-2xl font-black leading-none tracking-wider text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] sm:text-4xl">
-            {hud.score.toLocaleString()}
+            {hud.score.toLocaleString('en-US')}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs font-bold tracking-widest text-white/80 sm:text-sm">
-            <span>{hud.distance.toLocaleString()} m</span>
+            <span>{hud.distance.toLocaleString('en-US')} m</span>
             <span className="text-cyan-200">⬡ {hud.orbs}</span>
             {hud.gates > 0 && <span className="text-fuchsia-300">✦ {hud.gates}</span>}
           </div>
@@ -86,7 +86,7 @@ export function Hud({
                 !is3D ? 'bg-cyan-300 text-slate-900' : 'text-white/40'
               }`}
             >
-              2D SIDE
+              2D SIDE-SCROLL
             </span>
             <span
               className={`px-2 py-1.5 font-display transition-colors sm:px-3 ${
@@ -98,7 +98,6 @@ export function Hud({
           </div>
           <div className="text-center font-display text-[0.5rem] tracking-[0.18em] text-white/60 sm:text-[0.6rem] sm:tracking-[0.25em]">
             ZONE {hud.zone} · {hud.zoneName}
-            <span className="hidden sm:inline"> · CAM {Math.round(hud.cameraAngle)}°</span>
           </div>
         </div>
 
@@ -159,11 +158,11 @@ export function Hud({
         <div className="mt-1.5 flex items-center justify-center gap-2 text-[0.68rem] font-bold tracking-[0.16em] sm:text-xs">
           <span className={`keycap ${hud.canShift && !is3D ? 'anim-pulse-ring' : ''}`}>SPACE</span>
           {is3D ? (
-            <span className="text-fuchsia-200">RETURN TO 2D · FREE · 3D DRAINS THE GAUGE</span>
+            <span className="text-fuchsia-200">RETURN TO 2D · FREE · 3D DRAINS ENERGY</span>
           ) : hud.canShift ? (
             <span className="text-cyan-100">SHIFT TO 3D · −{Math.round(hud.shiftCost)} ENERGY</span>
           ) : (
-            <span className="text-rose-200">NEED {Math.ceil(hud.shiftCost - hud.energy)} MORE ENERGY · GRAB ORBS</span>
+            <span className="text-rose-200">NEED {Math.ceil(hud.shiftCost - hud.energy)} MORE ENERGY · GRAB ⬡ ORBS</span>
           )}
         </div>
       </div>
@@ -188,7 +187,7 @@ export function Hud({
           <span className="keycap">▲ / W</span> jump (2D) · walk up (3D)
         </span>
         <span>
-          <span className="keycap">▼ / S</span> walk down (3D)
+          <span className="keycap">▼ / S</span> slide (2D) · walk down (3D)
         </span>
         <span>
           <span className="keycap">P</span> pause
@@ -199,7 +198,7 @@ export function Hud({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden items-end justify-between p-4 [@media(pointer:coarse)]:flex">
         <div className="flex flex-col gap-3">
           <HoldButton label="▲" sub={is3D ? 'UP' : 'JUMP'} onHold={(d) => engineRef.current?.touchUp(d)} />
-          <HoldButton label="▼" sub="DOWN" small onHold={(d) => engineRef.current?.touchDown(d)} />
+          <HoldButton label="▼" sub={is3D ? 'DOWN' : 'SLIDE'} small onHold={(d) => engineRef.current?.touchDown(d)} />
         </div>
         <button
           className={`pointer-events-auto flex h-28 w-28 touch-none flex-col items-center justify-center rounded-full border-2 font-display text-xs font-black tracking-widest text-white shadow-lg active:scale-95 ${

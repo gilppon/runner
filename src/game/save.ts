@@ -59,12 +59,12 @@ export interface Milestone {
 }
 
 export const MILESTONES: Milestone[] = [
-  { key: 'orbs', at: 300, shards: 40, icon: '*', label: '300 orbs' },
-  { key: 'orbs', at: 1200, shards: 120, icon: '*', label: '1,200 orbs' },
-  { key: 'gates', at: 10, shards: 80, icon: '@', label: '10 gates' },
-  { key: 'gates', at: 40, shards: 250, icon: '@', label: '40 gates' },
-  { key: 'dist', at: 500, shards: 60, icon: '#', label: '500m cleared' },
-  { key: 'dist', at: 1500, shards: 220, icon: '#', label: '1,500m cleared' },
+  { key: 'orbs', at: 300, shards: 40, icon: '⬡', label: '300 orbs' },
+  { key: 'orbs', at: 1200, shards: 120, icon: '⬡', label: '1,200 orbs' },
+  { key: 'gates', at: 10, shards: 80, icon: '✦', label: '10 gates' },
+  { key: 'gates', at: 40, shards: 250, icon: '✦', label: '40 gates' },
+  { key: 'dist', at: 500, shards: 60, icon: '📏', label: '500 m cleared' },
+  { key: 'dist', at: 1500, shards: 220, icon: '📏', label: '1,500 m cleared' },
 ];
 
 export function dailyStatus(s: SaveData): { available: boolean; day: number; shards: number } {

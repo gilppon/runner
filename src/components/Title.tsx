@@ -1,5 +1,4 @@
 import { petById } from '../game/content';
-import type { PokiStatus } from '../game/poki';
 import { dailyStatus, nextMilestone, upcomingMilestone, type SaveData } from '../game/save';
 
 function Key({ children }: { children: React.ReactNode }) {
@@ -15,7 +14,6 @@ export function Title({
   save,
   busy,
   muted,
-  pokiStatus,
   onPlay,
   onHub,
   onMute,
@@ -25,7 +23,6 @@ export function Title({
   save: SaveData;
   busy: boolean;
   muted: boolean;
-  pokiStatus: PokiStatus;
   onPlay: () => void;
   onHub: () => void;
   onMute: () => void;
@@ -48,7 +45,7 @@ export function Title({
             daily.available ? 'anim-pulse-ring text-cyan-200' : 'cursor-default text-white/40'
           }`}
         >
-          {daily.available ? `+${daily.shards} (Day ${daily.day})` : `Day ${daily.day}`}
+          {daily.available ? `+${daily.shards} Shards · Day ${daily.day}` : `Day ${daily.day} claimed`}
         </button>
         {ms ? (
           <button
@@ -64,7 +61,7 @@ export function Title({
           </span>
         ) : null}
         <div className="glass flex items-center gap-2 rounded-full px-4 py-1.5 font-display text-sm font-bold text-amber-200">
-          ◆ {save.shards.toLocaleString()}
+          ◆ {save.shards.toLocaleString('en-US')}
         </div>
         <button
           onClick={(e) => {
@@ -113,17 +110,17 @@ export function Title({
           {
             t: '2D SIDE-SCROLL',
             c: 'text-cyan-200',
-            d: 'Jump pits, spikes and spike balls with ▲ / W. Depth is an illusion: everything counts as flat.',
+            d: 'Jump pits, spikes and spike balls with ▲ / W. Everything here is flat — depth is a lie.',
           },
           {
             t: '3D TOP-DOWN',
             c: 'text-fuchsia-300',
-            d: 'Steer with ▲ ▼ to slip around giant walls. No jumping — and the energy gauge drains.',
+            d: 'Steer with ▲ ▼ to slip around giant walls. No jumping — and your energy drains.',
           },
           {
             t: 'ORBS & GATES',
             c: 'text-amber-200',
-            d: 'Orbs refill the gauge. A light beam behind a wall marks a hidden Dimension Gate.',
+            d: 'Orbs refill your Dimension Energy. A light beam behind a wall marks a hidden Dimension Gate.',
           },
         ].map((c) => (
           <div key={c.t} className="glass rounded-xl p-3 text-left">
@@ -134,17 +131,14 @@ export function Title({
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs font-bold tracking-[0.2em] text-white/70">
-        <span>BEST {save.best.toLocaleString()}</span>
-        <span>FARTHEST {save.bestDist.toLocaleString()} m</span>
+        <span>BEST SCORE {save.best.toLocaleString('en-US')}</span>
+        <span>FARTHEST {save.bestDist.toLocaleString('en-US')} m</span>
         <span>RUNS {save.runs}</span>
         {pet && (
           <span className="text-white">
             COMPANION {pet.emoji} {pet.name.toUpperCase()}
           </span>
         )}
-      </div>
-      <div className="mt-2 text-[0.6rem] tracking-[0.25em] text-white/40">
-        POKI SDK · {pokiStatus === 'live' ? 'LIVE' : pokiStatus === 'loading' ? 'CONNECTING…' : 'SIMULATED HOOKS'}
       </div>
       </div>
     </div>

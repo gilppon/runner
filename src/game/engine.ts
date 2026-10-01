@@ -259,7 +259,7 @@ export class GameEngine {
       const cost = this.shiftCost;
       if (r.energy < cost) {
         audio.deny();
-        this.emit({ type: 'toast', text: 'NOT ENOUGH DIMENSION ENERGY — collect orbs!', tone: 'bad' });
+        this.emit({ type: 'toast', text: 'NOT ENOUGH ENERGY — grab orbs!', tone: 'bad' });
         r.shiftCd = 0.4;
         return;
       }
@@ -527,7 +527,7 @@ export class GameEngine {
     run.invuln = 1.6;
     this.emit({
       type: 'toast',
-      text: o ? 'CRASH! Phase shield engaged.' : 'LOST IN THE VOID! Rebuilding you ahead…',
+      text: o ? 'CRASH! Phase shield engaged.' : 'LOST IN THE VOID! Back on your feet…',
       tone: 'bad',
     });
     this.pushHud();
@@ -708,7 +708,7 @@ export class GameEngine {
         run.energy = 0;
         this.setMode('2D_Side');
         run.shiftCd = 0.4;
-        this.emit({ type: 'toast', text: 'GAUGE EMPTY — snapped back to 2D!', tone: 'bad' });
+        this.emit({ type: 'toast', text: 'ENERGY EMPTY — snapped back to 2D!', tone: 'bad' });
       }
     } else if (cfg.regen2D > 0) {
       run.energy = Math.min(cfg.maxEnergy, run.energy + cfg.regen2D * dt);

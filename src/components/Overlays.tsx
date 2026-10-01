@@ -49,16 +49,16 @@ export function GameOver({
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]">
       <div className="glass w-full max-w-md rounded-2xl p-6 text-center">
         <div className="font-display text-xs font-bold tracking-[0.4em] text-rose-300">SIGNAL LOST</div>
-        <div className="mt-1 font-display text-4xl font-black text-white sm:text-5xl">{result.score.toLocaleString()}</div>
+        <div className="mt-1 font-display text-4xl font-black text-white sm:text-5xl">{result.score.toLocaleString('en-US')}</div>
         {newBest ? (
           <div className="mt-1 font-display text-xs font-black tracking-[0.3em] text-amber-300">★ NEW BEST ★</div>
         ) : (
-          <div className="mt-1 text-xs font-bold tracking-widest text-white/50">BEST {save.best.toLocaleString()}</div>
+          <div className="mt-1 text-xs font-bold tracking-widest text-white/50">BEST {save.best.toLocaleString('en-US')}</div>
         )}
 
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           {[
-            ['DISTANCE', `${result.distance.toLocaleString()} m`],
+            ['DISTANCE', `${result.distance.toLocaleString('en-US')} m`],
             ['ORBS', `⬡ ${result.orbs}`],
             ['GATES', `✦ ${result.gates}`],
           ].map(([k, v]) => (
@@ -70,7 +70,7 @@ export function GameOver({
         </div>
 
         <div className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-display text-sm font-black text-amber-200">
-          ◆ +{result.shards * (doubled ? 2 : 1)} SHARDS {doubled && <span className="text-xs text-emerald-300">(DOUBLED)</span>}
+          ◆ +{(result.shards * (doubled ? 2 : 1)).toLocaleString('en-US')} SHARDS {doubled && <span className="text-xs text-emerald-300">(DOUBLED)</span>}
         </div>
 
         {result.petsFound.length > 0 && (
@@ -127,12 +127,11 @@ export function AdOverlay({ kind, onDone }: { kind: 'commercial' | 'rewarded'; o
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6 text-center">
       <div className="font-display text-xs font-bold tracking-[0.4em] text-white/50">
-        {kind === 'rewarded' ? 'REWARDED AD · SIMULATION' : 'AD BREAK · SIMULATION'}
+        {kind === 'rewarded' ? 'REWARDED AD' : 'AD BREAK'}
       </div>
       <div className="anim-floaty my-6 text-7xl">📺</div>
       <div className="max-w-md text-base text-white/80">
-        Poki SDK isn’t available in this environment, so this is a stand-in for the real rewarded video.
-        Game audio and input are muted while an ad plays.
+        This is a stand-in for a real rewarded video. Game audio and input are muted while an ad plays.
       </div>
       <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/15">
         <div className="h-full bg-gradient-to-r from-cyan-300 to-fuchsia-400" style={{ width: `${Math.min(100, (t / DURATION) * 100)}%` }} />

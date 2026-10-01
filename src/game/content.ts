@@ -135,7 +135,7 @@ export interface UpgradeDef {
 export const UPGRADES: UpgradeDef[] = [
   {
     key: 'gauge',
-    name: 'Gauge Capacity',
+    name: 'Energy Capacity',
     icon: '🔋',
     max: 12,
     baseCost: 30,
@@ -160,8 +160,8 @@ export const UPGRADES: UpgradeDef[] = [
     max: 8,
     baseCost: 35,
     growth: 1.5,
-    blurb: 'Every collected orb refills more of the gauge.',
-    stat: (l) => `Orb energy +${(8 + l * 1.2).toFixed(1)}`,
+    blurb: 'Every orb you collect refills more energy.',
+    stat: (l) => `+${(8 + l * 1.2).toFixed(1)} energy per orb`,
   },
 ];
 
@@ -180,7 +180,7 @@ export const TOWER_FLOORS: TowerFloor[] = [
   { id: 'lounge', name: 'Paradox Lounge', style: '2D', blurb: 'Where scores are inflated on purpose.', perk: { scorePct: 0.1 } },
   { id: 'observatory', name: 'Rift Observatory', style: '3D', blurb: 'Watches orbs before they spawn.', perk: { orbEnergy: 1.5 } },
   { id: 'cafe', name: 'Klein Bottle Café', style: 'HYBRID', blurb: 'The inside is also the outside.', perk: { shardsPct: 0.12 } },
-  { id: 'lab', name: 'Tesseract Lab', style: '3D', blurb: 'Expands the gauge in a fourth direction.', perk: { maxEnergy: 20 } },
+  { id: 'lab', name: 'Tesseract Lab', style: '3D', blurb: 'Expands your energy in a fourth direction.', perk: { maxEnergy: 20 } },
   { id: 'stairwell', name: 'Escher Stairwell', style: 'HYBRID', blurb: 'Always up. Also always down.', perk: { scorePct: 0.12 } },
   { id: 'apex', name: 'Apex Singularity', style: 'HYBRID', blurb: 'One point holding every plane.', perk: { lives: 1, magnet: 0.8 } },
 ];
@@ -193,10 +193,10 @@ export function perkLines(p: Perk): string[] {
   if (p.shiftCostPct) out.push(`Shift cost −${Math.round(p.shiftCostPct * 100)}%`);
   if (p.shardsPct) out.push(`+${Math.round(p.shardsPct * 100)}% shards`);
   if (p.scorePct) out.push(`+${Math.round(p.scorePct * 100)}% score`);
-  if (p.lives) out.push(`+${p.lives} life`);
+  if (p.lives) out.push(`+${p.lives} ${p.lives === 1 ? 'life' : 'lives'}`);
   if (p.startEnergy) out.push(`+${p.startEnergy} start energy`);
   if (p.orbEnergy) out.push(`+${p.orbEnergy} orb energy`);
-  if (p.maxEnergy) out.push(`+${p.maxEnergy} gauge capacity`);
+  if (p.maxEnergy) out.push(`+${p.maxEnergy} energy capacity`);
   return out;
 }
 

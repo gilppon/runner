@@ -27,7 +27,7 @@ export function Hub({ save, update, onClose }: { save: SaveData; update: Updater
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-amber-300/40 bg-black/30 px-4 py-1.5 font-display text-sm font-bold text-amber-200">
-              ◆ {save.shards.toLocaleString()}
+              ◆ {save.shards.toLocaleString('en-US')}
             </div>
             <button onClick={onClose} className="btn btn-ghost px-4 py-2 text-xs">
               ✕ Close
@@ -115,7 +115,7 @@ function Upgrades({ save, update }: { save: SaveData; update: Updater }) {
               }}
               className="btn btn-gold mt-3 py-2.5 text-xs"
             >
-              {maxed ? 'MAXED' : `Upgrade · ◆ ${cost}`}
+              {maxed ? 'MAXED' : `Upgrade · ◆ ${cost.toLocaleString('en-US')}`}
             </button>
           </div>
         );
@@ -220,7 +220,7 @@ function Pets({ save, update }: { save: SaveData; update: Updater }) {
           </div>
         </div>
         <button disabled={!can} onClick={hatch} className="btn btn-gold px-6 py-3 text-xs">
-          {complete ? 'Collection complete' : `Hatch · ◆ ${EGG_COST}`}
+          {complete ? 'Collection complete' : `Hatch · ◆ ${EGG_COST.toLocaleString('en-US')}`}
         </button>
       </div>
 
@@ -375,7 +375,7 @@ function Tower({ save, update }: { save: SaveData; update: Updater }) {
     <div className="grid gap-4 md:grid-cols-[260px_1fr]">
       <div className="glass flex min-h-[260px] flex-col items-center justify-end rounded-xl p-4">
         <div className="mb-3 self-start text-xs font-bold tracking-widest text-white/60">
-          HEIGHT: {built + 1} FLOORS
+          HEIGHT · {built + 1} {built === 0 ? 'FLOOR' : 'FLOORS'}
         </div>
         <TowerView built={built} justBuilt={justBuilt} />
       </div>
@@ -399,7 +399,7 @@ function Tower({ save, update }: { save: SaveData; update: Updater }) {
             }}
             className="btn btn-gold mt-3 px-6 py-3 text-xs"
           >
-            {done ? 'Tower complete' : `Build floor ${built + 2} · ◆ ${cost}`}
+            {done ? 'Tower complete' : `Build floor ${built + 2} · ◆ ${cost.toLocaleString('en-US')}`}
           </button>
         </div>
         {TOWER_FLOORS.map((f, i) => (

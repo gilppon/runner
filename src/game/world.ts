@@ -602,7 +602,7 @@ export class World {
       this.addObstacle('beam', bx, bx + w, beamH, 9.5, -TRACK_Z, TRACK_Z);
       this.addDecorOrbs(bx + w / 2);
       // Only the first beam shows the duck hint (once per run, engine caps it at 3)
-      if (i === 0) this.addHint(bx - 9, bx + 4, 'duck', 'Press DOWN to slide under!', 'v');
+      if (i === 0) this.addHint(bx - 9, bx + 4, 'duck', 'Press DOWN to slide under!', '⬇');
     }
     return x0 + (count - 1) * gap + 4.5;
   }
@@ -644,7 +644,7 @@ export class World {
       prevZ = gc;
       s = -s;
     }
-    this.addHint(x0 - 30, x0, 'slalom', 'Slalom! Stay in 3D and weave through the gaps — watch your gauge.', '🌀');
+    this.addHint(x0 - 30, x0, 'slalom', 'Slalom! Stay in 3D and weave through the gaps — watch your energy.', '🌀');
     return x0 + 2 * spacing + len;
   }
 

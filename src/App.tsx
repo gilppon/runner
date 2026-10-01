@@ -11,7 +11,6 @@ import {
 import type { SaveData } from './game/save';
 import { audio } from './game/audio';
 import { poki } from './game/poki';
-import type { PokiStatus } from './game/poki';
 import { petById } from './game/content';
 import type { EngineEvent, HudState, RunResult, ToastTone } from './game/types';
 import { Hud, Toasts } from './components/Hud';
@@ -54,7 +53,6 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [ad, setAd] = useState<PendingAd | null>(null);
-  const [pokiStatus, setPokiStatus] = useState<PokiStatus>(poki.status);
   const [muted, setMuted] = useState(save.muted);
   const toastId = useRef(0);
 
@@ -148,7 +146,6 @@ export default function App() {
   }, [supported]);
 
   useEffect(() => {
-    const off = poki.onStatus(setPokiStatus);
     poki.registerMockAd((kind) => new Promise<boolean>((resolve) => setAd({ kind, resolve })));
     void poki.init().then(() => {
       if (!loadingFinishedSent) {
@@ -157,7 +154,6 @@ export default function App() {
       }
     });
     return () => {
-      off();
       poki.registerMockAd(null);
     };
   }, []);
@@ -287,10 +283,9 @@ export default function App() {
       ) : (
         <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
           <div className="glass max-w-md rounded-2xl p-8">
-            <div className="font-display text-xl font-black tracking-widest text-white">WEBGL REQUIRED</div>
+            <div className="font-display text-xl font-black tracking-widest text-white">3D VIEW UNAVAILABLE</div>
             <p className="mt-3 text-white/75">
-              This runner renders a real 3D world with Three.js. Please enable hardware acceleration or try another
-              browser.
+              This browser could not start the 3D view. Please enable hardware acceleration, or try another browser.
             </p>
           </div>
         </div>
@@ -301,7 +296,6 @@ export default function App() {
           save={save}
           busy={busy}
           muted={muted}
-          pokiStatus={pokiStatus}
           onPlay={() => void startRun()}
           onHub={openHub}
           onMute={toggleMute}
