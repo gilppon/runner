@@ -15,7 +15,7 @@ export class Particles {
   private alive = 0;
   private budget = 1;
 
-  /** 자동 화질 강등용: 파티클 생성 비율 (0.35~1) */
+  /** Auto quality-reduction particle spawn ratio (0.35-1) */
   setBudget(v: number) {
     this.budget = Math.max(0.2, Math.min(1, v));
   }

@@ -201,7 +201,7 @@ export default function App() {
     }
   }, []);
 
-  // 일시정지 해제는 런 연속성 유지가 우선 → 전면 광고 금지 (포털 심사 위반)
+  // Resume must not break run continuity, so no interstitial there (portal review violation)
   const resume = useCallback(() => {
     engineRef.current?.resume();
     setScreen('playing');
@@ -309,7 +309,7 @@ export default function App() {
             update((s) => {
               const d = dailyStatus(s);
               if (!d.available) return s;
-              pushToast(`출석 ${d.day}일째 보상! +${d.shards} ◆`, 'good');
+              pushToast(`Day ${d.day} check-in! +${d.shards} shards`, 'good');
               return { ...s, shards: s.shards + d.shards, lastDaily: Date.now(), dailyStreak: d.day };
             })
           }
@@ -317,7 +317,7 @@ export default function App() {
             update((s) => {
               const m = MILESTONES.find((x) => x.at === at);
               if (!m || s.claimedMilestones.includes(at) || !milestoneAchieved(s, m)) return s;
-              pushToast(`${m.label} 달성! +${m.shards} ◆`, 'gate');
+              pushToast(`${m.label} unlocked! +${m.shards} shards`, 'gate');
               return { ...s, shards: s.shards + m.shards, claimedMilestones: [...s.claimedMilestones, at] };
             })
           }

@@ -149,7 +149,7 @@ export class GameEngine {
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('visibilitychange', this.onVisibility);
 
-    // WebGL 컨텍스트 손실 대응 (복구 없이 영구 검은 화면 되는 최악 시나리오 방지)
+    // WebGL context-loss handling (prevents the worst case: permanent black screen)
     cv.addEventListener('webglcontextlost', this.onContextLost, false);
     cv.addEventListener('webglcontextrestored', this.onContextRestored, false);
 
@@ -348,7 +348,7 @@ export class GameEngine {
 
   private onBlur = () => {
     this.input = { upKey: false, upTouch: false, downKey: false, downTouch: false };
-    // 포털 iframe에서 탭/창 전환 시 게임플레이 중계속 방지
+    // Stop gameplay accounting when the tab or window changes inside a portal iframe
     if (this.state === 'playing') this.pause();
   };
 
@@ -357,7 +357,7 @@ export class GameEngine {
   };
 
   private ctxLost = false;
-  private duck = 0; // 덕/슬라이드 진행도 0~1
+  private duck = 0; // duck/slide progress 0-1
   private duckPrev = 0;
   private quality = 0;
   private qCooldown = 0;
@@ -367,7 +367,7 @@ export class GameEngine {
     e.preventDefault();
     this.pause();
     this.ctxLost = true;
-    this.emit({ type: 'error', message: '그래픽 컨텍스트가 손실되었습니다. 복구 중…' });
+    this.emit({ type: 'error', message: 'Graphics context lost. Recovering...' });
   };
 
   private onContextRestored = () => {
@@ -376,7 +376,7 @@ export class GameEngine {
     this.world.paletteDirty = true;
   };
 
-  /** 프레임타임 감시 기반 자동 화질 강등 (0=최고, 1=보통, 2=저사양) */
+  /** Frame-time driven auto quality downgrade (0=best, 1=normal, 2=low) */
   private autoQuality() {
     if (this.qCooldown > 0) {
       this.qCooldown -= 1;
@@ -480,7 +480,7 @@ export class GameEngine {
     const z0 = p.z - 0.26;
     const z1 = p.z + 0.26;
     const feet = p.y;
-    // 덕(슬라이드) 중에는 히트박스 높이 축소 → 낮은 천장 장애물 통과
+    // While ducking, shrink the hitbox height so low beams can be cleared
     const head = p.y + (this.duck > 0.05 ? PLAYER_H * 0.45 : PLAYER_H);
     for (const o of this.world.obstacles) {
       if (o.x1 <= x0 + 0.05 || o.x0 >= x1 - 0.05) continue;
@@ -653,7 +653,7 @@ export class GameEngine {
       this.particles.burst(p.x, p.y + 0.05, this.rz(), '#ffffff', 8, 3.5, 0.4, 6);
     }
 
-    // duck / slide (2D 전용): 공중에서는 무시, 지상에서만
+    // duck / slide (2D only): ignored in the air, ground only
     const wantDuck = !is3D && this.down && p.grounded;
     this.duck = damp(this.duck, wantDuck ? 1 : 0, wantDuck ? 26 : 16, dt);
     if (wantDuck && this.duckPrev < 0.5 && this.duck >= 0.5) {
@@ -832,7 +832,7 @@ export class GameEngine {
     const rz = lerp(5.6, p.z, e);
     pr.group.position.set(p.x, p.y, rz);
     pr.group.scale.z = flat;
-    // 덕: 몸을 낮추고 살짝 앞으로 늘어난 느낌
+    // duck: lower the body and stretch it slightly forward
     pr.group.scale.y = lerp(1, 0.52, this.duck);
     pr.group.scale.x = lerp(1, 1.12, this.duck);
     pr.animate(this.time, this.speed * (1 + this.duck * 0.15), p.grounded && !dead && this.duck < 0.5);
@@ -879,7 +879,7 @@ export class GameEngine {
       this.frameAvg += (raw - this.frameAvg) * 0.05;
       this.autoQuality();
     }
-    if (this.ctxLost) return; // 컨텍스트 손실 중에는 렌더 스킵
+    if (this.ctxLost) return; // skip rendering while the context is lost
     this.frame(dt);
   };
 

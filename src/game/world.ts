@@ -16,7 +16,7 @@ export const SPAWN_AHEAD = 100;
 const FLOOR_HALF = 6;
 const FLOOR_MIN = -24;
 const POOL = 72;
-const PLAYER_H_REF = 1.7; // 서있는 플레이어 높이 (덕 자세 0.45배)
+const PLAYER_H_REF = 1.7; // standing player height (0.45x while ducking)
 const BUILD_N = 26;
 const BUILD_SPAN = 240;
 const CUBE_N = 34;
@@ -148,7 +148,7 @@ export class World {
   private orbGlowGeo = new THREE.SphereGeometry(0.62, 10, 8);
 
   // materials
-  /** 바닥 타일: 단일 머티리얼 + 정점 컬러 (기존 6머티리얼 박스 + 스트립 2 = 8 drawcall → 1) */
+  /** Floor tile: single material + vertex colours (was 6-material boxes + 2 strips = 8 drawcalls -> 1) */
   private matTile = new THREE.MeshStandardMaterial({ roughness: 0.85, vertexColors: true });
   private tileGeoA!: THREE.BufferGeometry;
   private tileGeoB!: THREE.BufferGeometry;
@@ -204,7 +204,7 @@ export class World {
     this.buildTiles();
     this.buildBackdrop();
     this.grid = this.buildGrid();
-    this.applyPalette(this.cur); // 타일 정점 컬러도 여기서 최종 색칠됨
+    this.applyPalette(this.cur); // tile vertex colours are finally tinted here
   }
 
   // ---- theme ---------------------------------------------------------------
@@ -250,8 +250,8 @@ export class World {
   // ---- static scenery ------------------------------------------------------
 
   /**
-   * 타일 1개 = 박스 + 좌우 스트립을 단일 BufferGeometry로 병합.
-   * 정점 컬러로 면별 색(상단/측면/스트립)을 표현해 drawcall을 8 → 1로 줄인다.
+   * One tile = box plus left/right strips merged into a single BufferGeometry.
+   * Vertex colours encode per-face colour (top/side/strip), cutting drawcalls from 8 to 1.
    */
   private makeTileGeo(checker: 0 | 1) {
     const parts: THREE.BufferGeometry[] = [];
@@ -291,7 +291,7 @@ export class World {
         nor[(vo + i) * 3 + 2] = n.getZ(i);
       }
       for (let i = 0; i < gi.count; i++) idx[io + i] = gi.getX(i) + vo;
-      // 스트립(두 번째/third 파트)은 강조색
+      // The strips (second/third parts) use the accent colour
       const isStrip = g !== parts[0];
       for (let i = 0; i < p.count; i++) {
         if (isStrip) {
@@ -299,7 +299,7 @@ export class World {
           col[(vo + i) * 3 + 1] = 1;
           col[(vo + i) * 3 + 2] = 1;
         } else {
-          // role 2 = 상단(또는 +z면, 2D 리드용), role 0 = 측면
+          // role 2 = top face (or +z face, used for the 2D read), role 0 = side
           const isTop = n.getY(i) > 0.5 || n.getZ(i) > 0.5;
           col[(vo + i) * 3] = isTop ? 2 : 0;
           col[(vo + i) * 3 + 1] = isTop ? 2 : 0;
@@ -321,7 +321,7 @@ export class World {
     return out;
   }
 
-  /** 테마 전환 시 정점 컬러를 팔레트로 재계산 (role: 0=측면, 1=스트립, 2=상단) */
+  /** Recompute vertex colours from the palette on theme change (role: 0=side, 1=strip, 2=top) */
   private retintTiles(floorA: THREE.Color, floorB: THREE.Color, side: THREE.Color, accent: THREE.Color) {
     const pairs: [THREE.BufferGeometry, THREE.Color][] = [
       [this.tileGeoA, floorA],
@@ -591,18 +591,18 @@ export class World {
     }
   }
 
-  /** 낮은 보(beam)連: 서 있으면 부딪히고, 덕(▼)으로 스쳐야 통과. */
+  /** Low beam run: standing collides, you must duck (v) to skim under. */
   private pLowBeams(x0: number, speed: number): number {
     const count = 2 + Math.floor(Math.random() * 2);
     const gap = Math.max(7.5, speed * 0.85);
-    const beamH = PLAYER_H_REF * 0.78; // 서있는 머리(1.62)보다 낮게
+    const beamH = PLAYER_H_REF * 0.78; // lower than a standing head (1.62)
     for (let i = 0; i < count; i++) {
       const bx = x0 + i * gap;
       const w = 3.4 + Math.random() * 1.6;
       this.addObstacle('beam', bx, bx + w, beamH, 9.5, -TRACK_Z, TRACK_Z);
       this.addDecorOrbs(bx + w / 2);
-      // 첫 번째 보에만 덕 조작 힌트 (런당 1회, engine이 3회 제한)
-      if (i === 0) this.addHint(bx - 9, bx + 4, 'duck', '▼ 눌러서 낮게 통과!', '▼');
+      // Only the first beam shows the duck hint (once per run, engine caps it at 3)
+      if (i === 0) this.addHint(bx - 9, bx + 4, 'duck', 'Press DOWN to slide under!', 'v');
     }
     return x0 + (count - 1) * gap + 4.5;
   }
@@ -799,7 +799,7 @@ export class World {
     let spin: THREE.Object3D | undefined;
 
     if (kind === 'beam') {
-      // 낮은 보: 서 있으면 충돌, 덕 자세로 스쳐야 통과 (황색 경고 스트립)
+      // Low beam: collides when standing, skim under while ducking (yellow warning strip)
       g.add(new THREE.Mesh(this.boxGeo, this.matPanel));
       g.add(new THREE.LineSegments(this.edgeGeo, this.lineWall));
       for (const yy of [-0.42, 0.42]) {

@@ -46,10 +46,10 @@ export const DEFAULT_SAVE: SaveData = {
   tutorialSeen: false,
 };
 
-/** 일일 보상 7일 사이클 */
+/** 7-day daily reward cycle */
 export const DAILY_SHARDS = [30, 45, 60, 85, 120, 170, 260];
 
-/** 업적: 누적 오브/게이트/최고거리 기준 */
+/** Achievements: lifetime orbs / gates / best distance */
 export interface Milestone {
   key: 'orbs' | 'gates' | 'dist';
   at: number;
@@ -59,12 +59,12 @@ export interface Milestone {
 }
 
 export const MILESTONES: Milestone[] = [
-  { key: 'orbs', at: 300, shards: 40, icon: '🔮', label: '오브 300개' },
-  { key: 'orbs', at: 1200, shards: 120, icon: '🔮', label: '오브 1,200개' },
-  { key: 'gates', at: 10, shards: 80, icon: '🌀', label: '게이트 10회' },
-  { key: 'gates', at: 40, shards: 250, icon: '🌀', label: '게이트 40회' },
-  { key: 'dist', at: 500, shards: 60, icon: '📏', label: '500m 돌파' },
-  { key: 'dist', at: 1500, shards: 220, icon: '📏', label: '1,500m 돌파' },
+  { key: 'orbs', at: 300, shards: 40, icon: '*', label: '300 orbs' },
+  { key: 'orbs', at: 1200, shards: 120, icon: '*', label: '1,200 orbs' },
+  { key: 'gates', at: 10, shards: 80, icon: '@', label: '10 gates' },
+  { key: 'gates', at: 40, shards: 250, icon: '@', label: '40 gates' },
+  { key: 'dist', at: 500, shards: 60, icon: '#', label: '500m cleared' },
+  { key: 'dist', at: 1500, shards: 220, icon: '#', label: '1,500m cleared' },
 ];
 
 export function dailyStatus(s: SaveData): { available: boolean; day: number; shards: number } {
@@ -105,7 +105,7 @@ export function loadSave(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SAVE, hints: {}, claimedMilestones: [] };
     const p = JSON.parse(raw) as Partial<SaveData>;
-    // 손상/NaN 방어: 숫자 필드는 전부 클램프 후 병합
+    // Corruption/NaN guard: every numeric field is clamped before merging
     const merged: SaveData = {
       ...DEFAULT_SAVE,
       ...p,

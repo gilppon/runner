@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* 포털(외부요청 차단)에서도 폰트가 깨지지 않도록 로컬 번들 */
+/* Local bundle so fonts survive the portal blocking external requests */
 @font-face {
   font-family: "Orbitron";
   font-style: normal;

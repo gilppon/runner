@@ -133,7 +133,7 @@ class AudioManager {
     [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.35, 'triangle', 0.11, { delay: i * 0.07 }));
     this.noise(0.6, 0.06, 1800);
   }
-  /** 덕/슬라이드 시작: 낮고 짧은 마찰음 */
+  /** Duck/slide start: low, short friction sound */
   slide() {
     this.noise(0.22, 0.1, 700);
     this.tone(190, 0.18, 'sawtooth', 0.06, { slide: 110 });

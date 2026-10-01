@@ -43,12 +43,12 @@ export function Title({
         <button
           onClick={onClaimDaily}
           disabled={!daily.available}
-          title="매일 출석 보상"
+          title="Daily check-in reward"
           className={`glass flex items-center gap-1 rounded-full px-3 py-1.5 font-display text-xs font-bold transition ${
             daily.available ? 'anim-pulse-ring text-cyan-200' : 'cursor-default text-white/40'
           }`}
         >
-          {daily.available ? `📅 +${daily.shards} (${daily.day}일)` : `📅 ${daily.day}일`}
+          {daily.available ? `+${daily.shards} (Day ${daily.day})` : `Day ${daily.day}`}
         </button>
         {ms ? (
           <button

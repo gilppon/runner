@@ -165,10 +165,10 @@ class PokiBridge {
       } catch {
         audio.setAdMuted(false);
       }
-      // 실SDK 환경인데 광고 재고 없음 → 모의오버레이 노출 금지, 보상 미지급
+      // Real SDK but no ad inventory: do not show the mock overlay, do not grant the reward
       return false;
     }
-    // 오프플랫폼(개발/itch 등)에서만 모의 광고
+    // Mock ads only off-platform (dev / itch etc.)
     if (this.mockAd) {
       audio.setAdMuted(true);
       try {
@@ -177,7 +177,7 @@ class PokiBridge {
         audio.setAdMuted(false);
       }
     }
-    // 핸들러 미등록이면 무료 보상 주지 않음
+    // No handler registered means no free reward
     return false;
   }
 }
