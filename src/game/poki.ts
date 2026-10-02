@@ -110,10 +110,6 @@ class PokiBridge {
     return this.portal;
   }
 
-  private get tag(): string {
-    return this.portal === 'crazy' ? 'CrazyGames' : this.portal === 'poki' ? 'Poki' : 'Ads';
-  }
-
   private setStatus(s: PokiStatus) {
     this.status = s;
     this.listeners.forEach((l) => l(s));
@@ -180,7 +176,6 @@ class PokiBridge {
   }
 
   gameLoadingFinished() {
-    console.info(`[${this.tag}] gameLoadingFinished`);
     if (!this.live) return;
     try {
       if (this.portal === 'poki') window.PokiSDK!.gameLoadingFinished();
@@ -193,7 +188,6 @@ class PokiBridge {
   gameplayStart() {
     if (this.gameplayActive) return;
     this.gameplayActive = true;
-    console.info(`[${this.tag}] gameplayStart`);
     if (!this.live) return;
     try {
       if (this.portal === 'poki') window.PokiSDK!.gameplayStart();
@@ -206,7 +200,6 @@ class PokiBridge {
   gameplayStop() {
     if (!this.gameplayActive) return;
     this.gameplayActive = false;
-    console.info(`[${this.tag}] gameplayStop`);
     if (!this.live) return;
     try {
       if (this.portal === 'poki') window.PokiSDK!.gameplayStop();
@@ -218,7 +211,6 @@ class PokiBridge {
 
   /** Natural break between runs. Not every call shows an ad. */
   async commercialBreak(): Promise<void> {
-    console.info(`[${this.tag}] commercialBreak`);
     if (!this.live) return;
     if (this.portal === 'poki') {
       try {
@@ -249,7 +241,6 @@ class PokiBridge {
 
   /** Player explicitly chose to watch an ad. Resolves true when the reward should be granted. */
   async rewardedBreak(): Promise<boolean> {
-    console.info(`[${this.tag}] rewardedBreak`);
     if (this.live) {
       const started = performance.now();
       if (this.portal === 'poki') {
