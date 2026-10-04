@@ -102,6 +102,8 @@ class PokiBridge {
   status: PokiStatus = 'idle';
   private portal: Portal | null = null;
   private gameplayActive = false;
+  private gameplayNotified = false;
+  private loadingFinishedSent = false;
   private mockAd: MockAdHandler | null = null;
   private listeners = new Set<(s: PokiStatus) => void>();
 
@@ -132,7 +134,7 @@ class PokiBridge {
     const portal = env();
     try {
       if (portal === 'poki') {
-        await loadScript(POKI_URL, 4000, 'poki');
+        if (!window.PokiSDK) await loadScript(POKI_URL, 4000, 'poki');
         if (!window.PokiSDK) throw new Error('PokiSDK missing');
         await Promise.race([
           window.PokiSDK.init(),
@@ -144,7 +146,7 @@ class PokiBridge {
         this.setStatus('live');
         console.info('[Poki] SDK initialised');
       } else if (portal === 'crazy') {
-        await loadScript(CRAZY_URL, 4000, 'crazygames');
+        if (!crazySdk()) await loadScript(CRAZY_URL, 4000, 'crazygames');
         const sdk = crazySdk();
         if (!sdk) throw new Error('CrazyGames SDK missing');
         await Promise.race([
@@ -176,36 +178,44 @@ class PokiBridge {
   }
 
   gameLoadingFinished() {
-    if (!this.live) return;
+    if (!this.live || this.loadingFinishedSent) return;
     try {
       if (this.portal === 'poki') window.PokiSDK!.gameLoadingFinished();
       else crazySdk()?.game.loadingStop();
     } catch {
       /* ignore */
     }
+    this.loadingFinishedSent = true;
+    this.notifyGameplayStart();
   }
 
-  gameplayStart() {
-    if (this.gameplayActive) return;
-    this.gameplayActive = true;
-    if (!this.live) return;
+  private notifyGameplayStart() {
+    if (!this.live || !this.loadingFinishedSent || !this.gameplayActive || this.gameplayNotified) return;
     try {
       if (this.portal === 'poki') window.PokiSDK!.gameplayStart();
       else crazySdk()?.game.gameplayStart();
+      this.gameplayNotified = true;
     } catch {
       /* ignore */
     }
   }
 
+  gameplayStart() {
+    this.gameplayActive = true;
+    this.notifyGameplayStart();
+  }
+
   gameplayStop() {
-    if (!this.gameplayActive) return;
+    if (!this.gameplayActive && !this.gameplayNotified) return;
     this.gameplayActive = false;
-    if (!this.live) return;
+    if (!this.live || !this.gameplayNotified) return;
     try {
       if (this.portal === 'poki') window.PokiSDK!.gameplayStop();
       else crazySdk()?.game.gameplayStop();
     } catch {
       /* ignore */
+    } finally {
+      this.gameplayNotified = false;
     }
   }
 
@@ -284,6 +294,7 @@ class PokiBridge {
       }
     }
     // Mock ads only off-platform (dev / itch etc.)
+    if (env() !== null) return false;
     if (this.mockAd) {
       audio.setAdMuted(true);
       try {

@@ -46,40 +46,47 @@ export function GameOver({
   onDouble: () => void;
 }) {
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]">
-      <div className="glass w-full max-w-md rounded-2xl p-6 text-center">
-        <div className="font-display text-xs font-bold tracking-[0.4em] text-rose-300">SIGNAL LOST</div>
-        <div className="mt-1 font-display text-4xl font-black text-white sm:text-5xl">{result.score.toLocaleString('en-US')}</div>
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-3xl border-4 border-amber-400/90 bg-gradient-to-b from-amber-950/95 to-stone-950/95 p-6 text-center shadow-2xl">
+        <div className="text-3xl">🐰💧</div>
+        <div className="mt-1 font-display text-sm font-black tracking-widest text-amber-300">OOPS! GAME OVER</div>
+        <div className="mt-1 font-display text-4xl font-black text-amber-100 sm:text-5xl drop-shadow-md">
+          {result.score.toLocaleString('en-US')}
+        </div>
         {newBest ? (
-          <div className="mt-1 font-display text-xs font-black tracking-[0.3em] text-amber-300">★ NEW BEST ★</div>
+          <div className="mt-1 font-display text-xs font-black tracking-[0.3em] text-yellow-400 animate-bounce">
+            ★ NEW BEST RECORD ★
+          </div>
         ) : (
-          <div className="mt-1 text-xs font-bold tracking-widest text-white/50">BEST {save.best.toLocaleString('en-US')}</div>
+          <div className="mt-1 text-xs font-bold tracking-widest text-amber-200/60">
+            BEST {save.best.toLocaleString('en-US')}
+          </div>
         )}
 
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+        <div className="mt-4 grid grid-cols-3 gap-2.5 text-center">
           {[
-            ['DISTANCE', `${result.distance.toLocaleString('en-US')} m`],
-            ['ORBS', `⬡ ${result.orbs}`],
-            ['GATES', `✦ ${result.gates}`],
+            ['🏃 DISTANCE', `${result.distance.toLocaleString('en-US')} m`],
+            ['🥕 CARROTS', `${result.orbs}`],
+            ['🏆 STAGE', `${result.gates + 1}`],
           ].map(([k, v]) => (
-            <div key={k} className="rounded-lg bg-white/8 px-2 py-2" style={{ background: 'rgba(255,255,255,0.07)' }}>
-              <div className="text-[0.6rem] font-bold tracking-[0.2em] text-white/55">{k}</div>
-              <div className="font-display text-sm font-black text-white">{v}</div>
+            <div key={k} className="rounded-2xl border border-amber-400/30 bg-black/40 px-2 py-2.5 shadow-inner">
+              <div className="text-[0.65rem] font-black tracking-wider text-amber-200/70">{k}</div>
+              <div className="mt-0.5 font-display text-base font-black text-white">{v}</div>
             </div>
           ))}
         </div>
 
-        <div className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-2 font-display text-sm font-black text-amber-200">
-          ◆ +{(result.shards * (doubled ? 2 : 1)).toLocaleString('en-US')} SHARDS {doubled && <span className="text-xs text-emerald-300">(DOUBLED)</span>}
+        <div className="mt-3.5 flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-400/40 bg-amber-500/20 px-4 py-2 font-display text-sm font-black text-amber-200 shadow-sm">
+          ✨ +{(result.shards * (doubled ? 2 : 1)).toLocaleString('en-US')} CARROT COINS {doubled && <span className="text-xs text-emerald-400 font-black">(2X!)</span>}
         </div>
 
         {result.petsFound.length > 0 && (
-          <div className="mt-2 text-sm font-bold text-fuchsia-200">
-            Pets found:{' '}
+          <div className="mt-2.5 text-sm font-bold text-fuchsia-200">
+            Friends Found:{' '}
             {result.petsFound.map((id) => {
               const p = petById(id);
               return p ? (
-                <span key={id} className="mr-1">
+                <span key={id} className="mr-1.5 inline-block rounded-full bg-fuchsia-500/20 px-2 py-0.5">
                   {p.emoji} {p.name}
                 </span>
               ) : null;
@@ -89,20 +96,36 @@ export function GameOver({
 
         <div className="mt-5 flex flex-col gap-2.5">
           {result.canRevive && (
-            <button disabled={busy} onClick={onRevive} className="btn btn-gold py-3 text-xs">
-              📺 Watch ad · Revive with 1 life
+            <button
+              disabled={busy}
+              onClick={onRevive}
+              className="rounded-full border-2 border-yellow-300 bg-gradient-to-r from-amber-400 to-yellow-500 py-3 text-xs font-black text-stone-900 shadow-lg transition active:scale-95 hover:brightness-110"
+            >
+              📺 Watch Ad · Revive with 1 Life
             </button>
           )}
           {!doubled && result.shards > 0 && (
-            <button disabled={busy} onClick={onDouble} className="btn btn-gold py-2.5 text-xs">
-              📺 Watch ad · Double shards
+            <button
+              disabled={busy}
+              onClick={onDouble}
+              className="rounded-full border border-yellow-400/60 bg-amber-500/30 py-2.5 text-xs font-black text-amber-200 shadow transition active:scale-95 hover:bg-amber-500/40"
+            >
+              📺 Watch Ad · Double Carrot Coins
             </button>
           )}
-          <button disabled={busy} onClick={onAgain} className="btn btn-primary py-3.5 text-sm">
-            ▶ Run again
+          <button
+            disabled={busy}
+            onClick={onAgain}
+            className="rounded-full border-2 border-amber-300 bg-gradient-to-r from-orange-500 to-amber-500 py-3.5 text-base font-black text-white shadow-xl transition active:scale-95 hover:brightness-110"
+          >
+            🥕 Play Again!
           </button>
-          <button disabled={busy} onClick={onHub} className="btn btn-ghost py-2.5 text-xs">
-            🗼 Spend shards in the Hub
+          <button
+            disabled={busy}
+            onClick={onHub}
+            className="rounded-full border border-white/20 bg-white/10 py-2.5 text-xs font-bold text-amber-200/80 transition active:scale-95 hover:bg-white/15"
+          >
+            🏠 Return to Carrot Village
           </button>
         </div>
       </div>

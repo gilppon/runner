@@ -13,12 +13,12 @@ import { Tweener, damp, ease, lerp } from './tween';
  */
 export const CAM = {
   H2: 17, // visible height (world units) in 2D
-  H3: 16.5, // visible height in 3D
+  H3: 14.5, // visible height in 3D
   MIN_W: 27, // minimum visible width, keeps portrait screens playable
   FOV2: 4,
-  FOV3: 50,
-  PITCH3: (78 * Math.PI) / 180,
-  DURATION: 0.85,
+  FOV3: 56,
+  PITCH3: (34 * Math.PI) / 180, // 34도 쾌적한 3인칭 체이스 런 앵글 (Talking Tom Gold Run 스타일!)
+  DURATION: 0.75,
 };
 
 export class CameraRig {

@@ -5,6 +5,15 @@ import App from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { audio } from "./game/audio";
 
+const unlockAudio = () => {
+  audio.unlock();
+  audio.startLobbyMusic();
+  window.removeEventListener('pointerdown', unlockAudio);
+  window.removeEventListener('keydown', unlockAudio);
+};
+window.addEventListener('pointerdown', unlockAudio, { once: true });
+window.addEventListener('keydown', unlockAudio, { once: true });
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary

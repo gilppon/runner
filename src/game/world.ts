@@ -17,10 +17,12 @@ const FLOOR_HALF = 6;
 const FLOOR_MIN = -24;
 const POOL = 72;
 const PLAYER_H_REF = 1.7; // standing player height (0.45x while ducking)
-const BUILD_N = 26;
-const BUILD_SPAN = 240;
-const CUBE_N = 34;
-const CUBE_SPAN = 220;
+const HILL_N = 18;
+const HILL_SPAN = 260;
+const CLOUD_N = 14;
+const CLOUD_SPAN = 280;
+const TREE_N = 24;
+const TREE_SPAN = 220;
 
 export type ObstacleKind = 'wall' | 'cap' | 'panel' | 'block' | 'spike' | 'platform' | 'roller' | 'beam';
 type PatternName = 'pit' | 'wallGap' | 'hurdles' | 'spikes' | 'slalom' | 'rollers' | 'hop' | 'vault' | 'lowBeams';
@@ -95,14 +97,15 @@ function makePalette(t: Theme): Palette {
   const danger = c(t.danger);
   return {
     floorA: floor.clone(),
-    floorB: floor.clone().lerp(WHITE, 0.12),
-    floorSide: floor.clone().multiplyScalar(0.55),
+    floorB: floor.clone().lerp(WHITE, 0.14),
+    // 흙 단면 (따뜻하고 진한 초콜릿 흙색)
+    floorSide: c('#54331a'),
     wall: wall.clone(),
-    wallEmis: wall.clone().multiplyScalar(0.55),
+    wallEmis: wall.clone().multiplyScalar(0.45),
     panel: wall.clone().lerp(accent2, 0.3),
     block: danger.clone(),
     spike: danger.clone().lerp(c('#ff2a4d'), 0.4),
-    platform: accent.clone().multiplyScalar(0.7),
+    platform: accent.clone().multiplyScalar(0.8),
     accent,
     accent2,
     orb: c(t.orb),
@@ -143,9 +146,14 @@ export class World {
   private boxGeo = new THREE.BoxGeometry(1, 1, 1);
   private edgeGeo = new THREE.EdgesGeometry(this.boxGeo);
   private ridgeGeo: THREE.ExtrudeGeometry;
-  private rollerGeo = new THREE.IcosahedronGeometry(0.66, 0);
-  private orbCoreGeo = new THREE.IcosahedronGeometry(0.3, 1);
-  private orbGlowGeo = new THREE.SphereGeometry(0.62, 10, 8);
+
+  // 🥕 엽기토끼 맞춤 지오메트리 & 머티리얼 (당근, 두루마리 휴지, 미니 뚫어뻥)
+  private carrotBodyGeo = new THREE.ConeGeometry(0.24, 0.72, 14);
+  private carrotLeafGeo = new THREE.CapsuleGeometry(0.045, 0.22, 6, 8);
+  private tissueOuterGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.88, 20);
+  private tissueInnerGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.9, 16);
+  private plungerCupGeo = new THREE.CylinderGeometry(0.24, 0.08, 0.2, 14);
+  private plungerStickGeo = new THREE.CylinderGeometry(0.038, 0.038, 0.65, 10);
 
   // materials
   /** Floor tile: single material + vertex colours (was 6-material boxes + 2 strips = 8 drawcalls -> 1) */
@@ -167,17 +175,42 @@ export class World {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
+  private matLeaf = new THREE.MeshStandardMaterial({
+    color: 0x22c55e,
+    roughness: 0.4,
+    emissive: 0x15803d,
+    emissiveIntensity: 0.25,
+  });
+  private matTissueOuter = new THREE.MeshStandardMaterial({
+    color: 0xfafafa,
+    roughness: 0.85,
+  });
+  private matTissueCore = new THREE.MeshStandardMaterial({
+    color: 0x8d5b4c,
+    roughness: 0.9,
+  });
+  private matPlungerStick = new THREE.MeshStandardMaterial({
+    color: 0xd4a373,
+    roughness: 0.6,
+  });
   private lineWall = new THREE.LineBasicMaterial();
   private lineBlock = new THREE.LineBasicMaterial();
   private linePlat = new THREE.LineBasicMaterial();
   private lineBuilding = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.4 });
   private lineCube = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.55 });
-  private lineGrid = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.5 });
+  // ☀️ 카툰 배경용 머티리얼
+  private matSun = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+  private matCloud = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, transparent: true, opacity: 0.95 });
+  private matHillFar = new THREE.MeshStandardMaterial({ color: 0x82b88c, roughness: 0.9 });
+  private matHillNear = new THREE.MeshStandardMaterial({ color: 0x4aa55c, roughness: 0.85 });
+  private matTrunk = new THREE.MeshStandardMaterial({ color: 0x825432, roughness: 0.8 });
+  private matCanopy = new THREE.MeshStandardMaterial({ color: 0x2e8b44, roughness: 0.6 });
 
   private tiles: THREE.Group[] = [];
-  private buildings: { mesh: THREE.Mesh; base: number }[] = [];
-  private cubes: { obj: THREE.LineSegments; base: number; spin: number }[] = [];
-  private grid: THREE.LineSegments;
+  private sun!: THREE.Group;
+  private clouds: { obj: THREE.Group; base: number; speed: number }[] = [];
+  private hills: { obj: THREE.Group; base: number }[] = [];
+  private trees: { obj: THREE.Group; base: number }[] = [];
   private orbFree: Orb[] = [];
 
   // palette state
@@ -203,7 +236,6 @@ export class World {
 
     this.buildTiles();
     this.buildBackdrop();
-    this.grid = this.buildGrid();
     this.applyPalette(this.cur); // tile vertex colours are finally tinted here
   }
 
@@ -243,25 +275,43 @@ export class World {
     this.linePlat.color.copy(p.accent);
     this.lineBuilding.color.copy(p.accent2);
     this.lineCube.color.copy(p.cube);
-    this.lineGrid.color.copy(p.grid);
     this.paletteDirty = true;
   }
 
   // ---- static scenery ------------------------------------------------------
 
   /**
-   * One tile = box plus left/right strips merged into a single BufferGeometry.
-   * Vertex colours encode per-face colour (top/side/strip), cutting drawcalls from 8 to 1.
+   * 🏃‍♂️ 상용급 러닝 트랙 지오메트리:
+   * - 중앙: 플레이어가 질주하는 황금 흙길/모래 런웨이 패스
+   * - 양옆: 싱그러운 잔디 갓길
+   * - 경계: 또렷한 화이트/골드 레인 마커선
+   * - 옆면: 깊고 단단한 초콜릿 흙 단면
    */
   private makeTileGeo(checker: 0 | 1) {
     const parts: THREE.BufferGeometry[] = [];
-    const box = new THREE.BoxGeometry(TILE, 6, FLOOR_HALF * 2);
-    box.translate(0, -3, 0);
-    parts.push(box);
+    
+    // 1. 메인 베이스 블록 (흙 단면)
+    const baseBox = new THREE.BoxGeometry(TILE, 6, FLOOR_HALF * 2);
+    baseBox.translate(0, -3, 0);
+    parts.push(baseBox);
+
+    // 2. 중앙 질주 런웨이 (따뜻한 흙길 패스, 폭 5.8)
+    const road = new THREE.BoxGeometry(TILE, 0.06, 5.8);
+    road.translate(0, 0.03, 0);
+    parts.push(road);
+
+    // 3. 양옆 레인 마커선 (또렷한 스트립, Z: -2.9, 2.9)
     for (const zs of [-1, 1]) {
-      const s = new THREE.BoxGeometry(TILE, 0.07, 0.3);
-      s.translate(0, 0.035, zs * (FLOOR_HALF - 0.25));
+      const s = new THREE.BoxGeometry(TILE, 0.08, 0.22);
+      s.translate(0, 0.04, zs * 2.9);
       parts.push(s);
+    }
+
+    // 4. 양옆 싱그러운 잔디 갓길 (Z: -4.5, 4.5)
+    for (const zs of [-1, 1]) {
+      const grass = new THREE.BoxGeometry(TILE, 0.07, 2.6);
+      grass.translate(0, 0.035, zs * 4.4);
+      parts.push(grass);
     }
 
     let vTotal = 0;
@@ -278,7 +328,8 @@ export class World {
 
     let vo = 0;
     let io = 0;
-    for (const g of parts) {
+    for (let partIdx = 0; partIdx < parts.length; partIdx++) {
+      const g = parts[partIdx];
       const p = g.attributes.position;
       const n = g.attributes.normal;
       const gi = g.index!;
@@ -291,20 +342,31 @@ export class World {
         nor[(vo + i) * 3 + 2] = n.getZ(i);
       }
       for (let i = 0; i < gi.count; i++) idx[io + i] = gi.getX(i) + vo;
-      // The strips (second/third parts) use the accent colour
-      const isStrip = g !== parts[0];
+
+      // Role 인코딩:
+      // role 0 = 흙 단면 (side)
+      // role 1 = 차선 마커선 (accent / yellow stripe)
+      // role 2 = 싱그러운 초록 잔디 (floorA / floorB)
+      // role 3 = 중앙 달리는 흙길 런웨이 도로 (road / sandy path)
       for (let i = 0; i < p.count; i++) {
-        if (isStrip) {
-          col[(vo + i) * 3] = 1;
-          col[(vo + i) * 3 + 1] = 1;
-          col[(vo + i) * 3 + 2] = 1;
+        let role = 0;
+        if (partIdx === 0) {
+          // 베이스 블록의 윗면은 잔디, 옆면은 흙
+          const isTop = n.getY(i) > 0.5;
+          role = isTop ? 2 : 0;
+        } else if (partIdx === 1) {
+          // 중앙 런웨이 도로
+          role = 3;
+        } else if (partIdx === 2 || partIdx === 3) {
+          // 레인 마커선
+          role = 1;
         } else {
-          // role 2 = top face (or +z face, used for the 2D read), role 0 = side
-          const isTop = n.getY(i) > 0.5 || n.getZ(i) > 0.5;
-          col[(vo + i) * 3] = isTop ? 2 : 0;
-          col[(vo + i) * 3 + 1] = isTop ? 2 : 0;
-          col[(vo + i) * 3 + 2] = isTop ? 2 : 0;
+          // 양옆 잔디 갓길
+          role = 2;
         }
+        col[(vo + i) * 3] = role;
+        col[(vo + i) * 3 + 1] = role;
+        col[(vo + i) * 3 + 2] = role;
       }
       void checker;
       vo += p.count;
@@ -321,17 +383,26 @@ export class World {
     return out;
   }
 
-  /** Recompute vertex colours from the palette on theme change (role: 0=side, 1=strip, 2=top) */
+  /** Recompute vertex colours from the palette on theme change */
   private retintTiles(floorA: THREE.Color, floorB: THREE.Color, side: THREE.Color, accent: THREE.Color) {
     const pairs: [THREE.BufferGeometry, THREE.Color][] = [
       [this.tileGeoA, floorA],
       [this.tileGeoB, floorB],
     ];
-    for (const [geo, topColor] of pairs) {
+    // 도로 런웨이 전용 따뜻한 황금 흙길 색상
+    const roadColor = new THREE.Color('#e0a96d');
+    const roadColorB = new THREE.Color('#d49b5c');
+
+    for (let pIdx = 0; pIdx < pairs.length; pIdx++) {
+      const [geo, grassColor] = pairs[pIdx];
+      const activeRoad = pIdx === 0 ? roadColor : roadColorB;
       const attr = geo.getAttribute('color') as THREE.BufferAttribute;
       for (let i = 0; i < attr.count; i++) {
-        const role = attr.getX(i);
-        const c = role === 1 ? accent : role === 2 ? topColor : side;
+        const role = Math.round(attr.getX(i));
+        let c = side;
+        if (role === 1) c = accent; // 선명한 차선 마커
+        else if (role === 2) c = grassColor; // 싱그러운 잔디
+        else if (role === 3) c = activeRoad; // 흙길 런웨이
         attr.setXYZ(i, c.r, c.g, c.b);
       }
       attr.needsUpdate = true;
@@ -352,43 +423,98 @@ export class World {
   }
 
   private buildBackdrop() {
-    for (let i = 0; i < BUILD_N; i++) {
-      const w = rnd(5, 12);
-      const h = rnd(8, 36);
-      const d = rnd(6, 12);
-      const m = new THREE.Mesh(this.boxGeo, this.matBuilding);
-      m.scale.set(w, h, d);
-      m.position.set(0, h / 2 - 8, -rnd(34, 78));
-      m.add(new THREE.LineSegments(this.edgeGeo, this.lineBuilding));
-      this.root.add(m);
-      this.buildings.push({ mesh: m, base: (i / BUILD_N) * BUILD_SPAN + rnd(-2, 2) });
-    }
-    for (let i = 0; i < CUBE_N; i++) {
-      const s = new THREE.LineSegments(this.edgeGeo, this.lineCube);
-      s.scale.setScalar(rnd(2.5, 7));
-      s.position.set(0, -rnd(16, 34), (Math.random() < 0.5 ? -1 : 1) * rnd(10, 55));
-      s.rotation.set(rnd(0, 3), rnd(0, 3), 0);
-      this.root.add(s);
-      this.cubes.push({ obj: s, base: rnd(0, CUBE_SPAN), spin: rnd(-0.3, 0.3) });
-    }
-  }
+    const sphereGeo = new THREE.SphereGeometry(1, 14, 10);
 
-  private buildGrid() {
-    const pts: number[] = [];
-    const N = 60;
-    const step = 6;
-    const half = (N * step) / 2;
-    for (let i = 0; i <= N; i++) {
-      const c = -half + i * step;
-      pts.push(-half, 0, c, half, 0, c, c, 0, -half, c, 0, half);
+    // 1. ☀️ 방긋 웃는 해님 (Smiling Sun)
+    const sunGroup = new THREE.Group();
+    const sunMesh = new THREE.Mesh(new THREE.CircleGeometry(3.6, 32), this.matSun);
+    sunGroup.add(sunMesh);
+
+    // 12가닥의 햇살
+    for (let i = 0; i < 12; i++) {
+      const ray = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 8), this.matSun);
+      const ang = (i * Math.PI * 2) / 12;
+      ray.position.set(Math.cos(ang) * 4.4, Math.sin(ang) * 4.4, 0);
+      ray.rotation.z = ang - Math.PI / 2;
+      sunGroup.add(ray);
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    const g = new THREE.LineSegments(geo, this.lineGrid);
-    g.position.y = -12;
-    g.frustumCulled = false;
-    this.root.add(g);
-    return g;
+
+    // 깜찍한 카툰 눈 & 핑크 볼터치
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x332211 });
+    const eyeL = new THREE.Mesh(this.boxGeo, eyeMat);
+    eyeL.scale.set(0.18, 0.45, 0.1);
+    eyeL.position.set(-1.1, 0.4, 0.1);
+    const eyeR = eyeL.clone();
+    eyeR.position.x = 1.1;
+
+    const pinkMat = new THREE.MeshBasicMaterial({ color: 0xff8fa3 });
+    const cheekL = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), pinkMat);
+    cheekL.position.set(-1.6, -0.4, 0.1);
+    const cheekR = cheekL.clone();
+    cheekR.position.x = 1.6;
+    sunGroup.add(eyeL, eyeR, cheekL, cheekR);
+
+    sunGroup.position.set(0, 24, -65);
+    this.root.add(sunGroup);
+    this.sun = sunGroup;
+
+    // 2. ☁️ 둥실둥실 솜사탕 구름 (Fluffy Clouds)
+    for (let i = 0; i < CLOUD_N; i++) {
+      const cg = new THREE.Group();
+      const parts = 3 + Math.floor(Math.random() * 2);
+      for (let p = 0; p < parts; p++) {
+        const m = new THREE.Mesh(sphereGeo, this.matCloud);
+        const r = rnd(1.4, 2.8);
+        m.scale.set(r, r * 0.75, r * 0.6);
+        m.position.set((p - parts / 2) * 1.8, rnd(-0.3, 0.4), rnd(-0.2, 0.2));
+        cg.add(m);
+      }
+      cg.position.set(0, rnd(14, 26), -rnd(45, 75));
+      this.root.add(cg);
+      this.clouds.push({ obj: cg, base: (i / CLOUD_N) * CLOUD_SPAN, speed: rnd(0.8, 1.6) });
+    }
+
+    // 3. 🏔️ 겹겹이 중첩된 완만한 카툰 산맥 (Rolling Hills)
+    for (let i = 0; i < HILL_N; i++) {
+      const hg = new THREE.Group();
+      const isFar = i % 2 === 0;
+      const mat = isFar ? this.matHillFar : this.matHillNear;
+      const radius = isFar ? rnd(16, 26) : rnd(9, 16);
+      const height = isFar ? rnd(18, 34) : rnd(10, 19);
+      const hill = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 18), mat);
+      hill.position.y = height / 2 - 8;
+      hill.scale.set(1.2, 1, 0.75);
+      hg.add(hill);
+      hg.position.set(0, 0, isFar ? -rnd(55, 80) : -rnd(32, 48));
+      this.root.add(hg);
+      this.hills.push({ obj: hg, base: (i / HILL_N) * HILL_SPAN });
+    }
+
+    // 4. 🌳 아기자기한 카툰 브로콜리 나무 (Trees)
+    for (let i = 0; i < TREE_N; i++) {
+      const tg = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 2.6, 10), this.matTrunk);
+      trunk.position.y = 1.3;
+      tg.add(trunk);
+
+      const foliage1 = new THREE.Mesh(sphereGeo, this.matCanopy);
+      foliage1.scale.set(1.4, 1.4, 1.4);
+      foliage1.position.y = 2.9;
+      const foliage2 = new THREE.Mesh(sphereGeo, this.matCanopy);
+      foliage2.scale.set(1.1, 1.1, 1.1);
+      foliage2.position.set(0.5, 3.4, 0.2);
+      const foliage3 = new THREE.Mesh(sphereGeo, this.matCanopy);
+      foliage3.scale.set(1.0, 1.0, 1.0);
+      foliage3.position.set(-0.4, 3.3, -0.2);
+      tg.add(foliage1, foliage2, foliage3);
+
+      const zSide = (Math.random() < 0.5 ? -1 : 1) * rnd(10, 24);
+      tg.position.set(0, 0, zSide);
+      const sc = rnd(0.85, 1.35);
+      tg.scale.set(sc, sc, sc);
+      this.root.add(tg);
+      this.trees.push({ obj: tg, base: (i / TREE_N) * TREE_SPAN });
+    }
   }
 
   // ---- queries -------------------------------------------------------------
@@ -488,15 +614,22 @@ export class World {
       p.group.visible = !p.used;
     }
 
-    // parallax scenery
-    for (const b of this.buildings) {
-      b.mesh.position.x = camX + mod(b.base - camX * 0.55, BUILD_SPAN) - BUILD_SPAN / 2;
+    // ☀️ 카툰 패럴랙스 애니메이션 (해님, 뭉게구름, 겹겹이 산맥, 숲)
+    if (this.sun) {
+      this.sun.position.x = camX + 18;
+      this.sun.rotation.z = t * 0.12;
+      const pulse = 1 + Math.sin(t * 2.2) * 0.035;
+      this.sun.scale.set(pulse, pulse, 1);
     }
-    for (const c of this.cubes) {
-      c.obj.position.x = camX + mod(c.base - camX, CUBE_SPAN) - CUBE_SPAN / 2;
-      c.obj.rotation.y += c.spin * dt;
+    for (const c of this.clouds) {
+      c.obj.position.x = camX + mod(c.base - camX * 0.22 - t * c.speed * 2, CLOUD_SPAN) - CLOUD_SPAN / 2;
     }
-    this.grid.position.x = Math.round(camX / 6) * 6;
+    for (const h of this.hills) {
+      h.obj.position.x = camX + mod(h.base - camX * 0.42, HILL_SPAN) - HILL_SPAN / 2;
+    }
+    for (const tr of this.trees) {
+      tr.obj.position.x = camX + mod(tr.base - camX * 0.95, TREE_SPAN) - TREE_SPAN / 2;
+    }
 
     // pruning
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
@@ -652,10 +785,8 @@ export class World {
   private pPit(x0: number, speed: number): number {
     const w = speed < 12.5 ? 4 : speed < 15 ? 6 : Math.random() < 0.5 ? 6 : 8;
     this.addPit(x0, x0 + w);
-    for (let i = 0; i < 5; i++) {
-      const t = i / 4;
-      this.addOrb(x0 - 1.5 + t * (w + 3), 1 + 1.6 * 4 * t * (1 - t), 0);
-    }
+    // 점프를 유도하는 환상적인 포물선 당근 트레일 7개!
+    this.addCarrotTrail(x0 - 2, w + 4, 1, 3.2, 0, 7);
     this.addHint(x0 - 30, x0, 'pit', 'Bottomless pit! Stay in 2D and jump with ▲ / W.', '🕳️');
     return x0 + w;
   }
@@ -668,8 +799,9 @@ export class World {
       const x = x0 + i * spacing;
       if (side > 0) this.addObstacle('block', x, x + 1.4, 0, 1.3, -TRACK_Z, 0.9);
       else this.addObstacle('block', x, x + 1.4, 0, 1.3, -0.9, TRACK_Z);
-      this.addOrb(x + 0.7, 2.7, side > 0 ? -2 : 2); // above: reward for 2D jumpers
-      this.addOrb(x + 0.7, 0.9, side * 2.9); // free lane: reward for 3D walkers
+      // 블록 위를 뛰어넘는 아치형 당근 4개 + 우회 레인 당근 4개
+      this.addCarrotTrail(x - 1, 3.4, 1.3, 3.0, side > 0 ? -2 : 2, 4);
+      this.addCarrotTrail(x - 0.5, 2.5, 0.9, 0.9, side * 2.9, 3);
       side = -side;
     }
     this.addHint(x0 - 30, x0, 'hurdle', 'Low blocks: jump ▲ in 2D — or sidestep in 3D.', '🟧');
@@ -682,7 +814,8 @@ export class World {
     for (let i = 0; i < 2; i++) {
       const x = x0 + i * 10;
       this.addObstacle('spike', x, x + len, 0, 0.95, -TRACK_Z, TRACK_Z, true);
-      for (const t of [0.15, 0.5, 0.85]) this.addOrb(x + len * t, 1.2 + 1.5 * 4 * t * (1 - t), 0);
+      // 가시밭 위를 넘는 탐스러운 아치형 당근 5개
+      this.addCarrotTrail(x - 0.5, len + 1, 1.2, 3.3, 0, 5);
     }
     this.addHint(x0 - 30, x0, 'spike', 'Spikes cover every depth — flatten to 2D and jump.', '⚠️');
     return x0 + 10 + len;
@@ -694,7 +827,8 @@ export class World {
       const x = x0 + i * 10;
       const o = this.addObstacle('roller', x - 0.6, x + 0.6, 0.05, 1.3, -0.6, 0.6, true);
       o.motion = { baseZ: 0, amp: 3.3, speed: rnd(1.6, 2.4), phase: rnd(0, 6.28), half: 0.6 };
-      this.addOrb(x + 4, 1, 0);
+      // 데굴데굴 휴지 롤 사이로 이어지는 당근 라인 4개
+      this.addCarrotTrail(x + 1.5, 5, 1, 2.5, 0, 4);
     }
     this.addHint(x0 - 30, x0, 'roller', 'Spike balls sweep the depth — jump in 2D, or time the sweep in 3D.', '🔴');
     return x0 + 20 + 0.6;
@@ -705,9 +839,8 @@ export class World {
     this.addPit(x0, x0 + 14);
     this.addObstacle('platform', x0 + 3.5, x0 + 8, -6, 1.5, -TRACK_Z - 0.6, TRACK_Z + 0.6);
     this.addObstacle('platform', x0 + 10, x0 + 14, -6, 1.5, -TRACK_Z - 0.6, TRACK_Z + 0.6);
-    this.addOrb(x0 + 5.75, 3.2, 0);
-    this.addOrb(x0 + 9, 3.9, 0);
-    this.addOrb(x0 + 12, 3.2, 0);
+    // 공중 플랫폼을 딛고 뛰는 대형 점프 당근 아치 8개
+    this.addCarrotTrail(x0 + 1, 12, 1.5, 4.3, 0, 8);
     this.addHint(x0 - 30, x0, 'hop', 'Broken bridge! Hop from pillar to pillar in 2D.', '🌉');
     return x0 + 14;
   }
@@ -747,6 +880,17 @@ export class World {
     }
   }
 
+  /** 🥕 줄줄이 당근 궤적 스폰 (Talking Tom 골드바 쾌감 연출) */
+  addCarrotTrail(xStart: number, len: number, yBase: number, yPeak: number, z: number, count = 6, front = true) {
+    for (let i = 0; i < count; i++) {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const arc = Math.sin(t * Math.PI);
+      const x = xStart + t * len;
+      const y = yBase + arc * (yPeak - yBase);
+      this.addOrb(x, y, z, front);
+    }
+  }
+
   // ---- builders ---------------------------------------------------------------
 
   private addPit(xa: number, xb: number) {
@@ -761,11 +905,28 @@ export class World {
     let o = this.orbFree.pop();
     if (!o) {
       const g = new THREE.Group();
-      const core = new THREE.Mesh(this.orbCoreGeo, this.matOrb);
-      const glow = new THREE.Mesh(this.orbGlowGeo, this.matOrbGlow);
-      g.add(core, glow);
+
+      // 🥕 탐스러운 주황색 당근 (Carrot) 조립
+      const carrot = new THREE.Mesh(this.carrotBodyGeo, this.matOrb);
+      carrot.rotation.x = Math.PI; // 아래로 뾰족하게
+      carrot.position.y = -0.04;
+
+      // 싱그러운 초록 잎사귀 3가닥
+      for (let i = 0; i < 3; i++) {
+        const ang = (i * Math.PI * 2) / 3;
+        const leaf = new THREE.Mesh(this.carrotLeafGeo, this.matLeaf);
+        leaf.position.set(Math.sin(ang) * 0.06, -0.36, Math.cos(ang) * 0.06);
+        leaf.rotation.x = Math.cos(ang) * 0.45;
+        leaf.rotation.z = Math.sin(ang) * 0.45;
+        carrot.add(leaf);
+      }
+
+      // 살짝 비스듬히 기울여서 공전할 때 깜찍한 실루엣 연출
+      carrot.rotation.z = 0.28;
+
+      g.add(carrot);
       this.root.add(g);
-      o = { obj: g, core, x, y, z, alive: true, phase: 0, front };
+      o = { obj: g, core: carrot, x, y, z, alive: true, phase: 0, front };
     }
     o.x = x;
     o.y = y;
@@ -799,31 +960,57 @@ export class World {
     let spin: THREE.Object3D | undefined;
 
     if (kind === 'beam') {
-      // Low beam: collides when standing, skim under while ducking (yellow warning strip)
+      // 🚧 귀여운 줄무늬 허들 바리케이드
       g.add(new THREE.Mesh(this.boxGeo, this.matPanel));
-      g.add(new THREE.LineSegments(this.edgeGeo, this.lineWall));
       for (const yy of [-0.42, 0.42]) {
         const s = new THREE.Mesh(this.boxGeo, this.matStrip);
-        s.scale.set(1.014, 0.06, 1.014);
+        s.scale.set(1.02, 0.08, 1.02);
         s.position.y = yy;
         g.add(s);
       }
       g.position.set(cx, cy, cz);
       g.scale.set(sx, sy, sz);
     } else if (kind === 'wall' || kind === 'cap' || kind === 'panel') {
-      g.add(new THREE.Mesh(this.boxGeo, kind === 'panel' ? this.matPanel : this.matWall));
-      g.add(new THREE.LineSegments(this.edgeGeo, this.lineWall));
-      for (const yy of [-0.32, 0, 0.32]) {
-        const s = new THREE.Mesh(this.boxGeo, this.matStrip);
-        s.scale.set(1.012, 0.035, 1.012);
-        s.position.y = yy;
-        g.add(s);
-      }
+      // 🎁 거대한 알록달록 장난감 선물 상자 탑 (Toy Gift Box Wall)
+      const boxMat = new THREE.MeshStandardMaterial({
+        color: kind === 'panel' ? 0x38bdf8 : 0xf472b6,
+        roughness: 0.4,
+      });
+      const ribbonMat = new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        roughness: 0.3,
+      });
+      g.add(new THREE.Mesh(this.boxGeo, boxMat));
+
+      // 세로 리본 띠
+      const ribbonV = new THREE.Mesh(this.boxGeo, ribbonMat);
+      ribbonV.scale.set(0.18, 1.01, 1.01);
+      g.add(ribbonV);
+
+      // 가로 리본 띠
+      const ribbonH = new THREE.Mesh(this.boxGeo, ribbonMat);
+      ribbonH.scale.set(1.01, 0.16, 1.01);
+      g.add(ribbonH);
+
       g.position.set(cx, cy, cz);
       g.scale.set(sx, sy, sz);
     } else if (kind === 'block') {
-      g.add(new THREE.Mesh(this.boxGeo, this.matBlock));
-      g.add(new THREE.LineSegments(this.edgeGeo, this.lineBlock));
+      // 🧱 앙증맞은 장난감 레고 블록 (Toy Lego Cube with studs)
+      const legoMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b, // 산뜻한 레고 옐로우/오렌지
+        roughness: 0.35,
+      });
+      const cube = new THREE.Mesh(this.boxGeo, legoMat);
+      g.add(cube);
+
+      // 상단 원형 스터드(단추) 2개
+      const studGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.16, 12);
+      const stud1 = new THREE.Mesh(studGeo, legoMat);
+      stud1.position.set(-0.25, 0.55, 0);
+      const stud2 = new THREE.Mesh(studGeo, legoMat);
+      stud2.position.set(0.25, 0.55, 0);
+      g.add(stud1, stud2);
+
       g.position.set(cx, cy, cz);
       g.scale.set(sx, sy, sz);
     } else if (kind === 'platform') {
@@ -836,24 +1023,41 @@ export class World {
       g.position.set(cx, cy, cz);
       g.scale.set(sx, sy, sz);
     } else if (kind === 'spike') {
+      // 🪠 엽기토끼의 미니 뚫어뻥 트랩 밭!
       const n = Math.max(1, Math.round(sx / 0.9));
       for (let i = 0; i < n; i++) {
-        const m = new THREE.Mesh(this.ridgeGeo, this.matSpike);
-        m.scale.set(sx / n, sy, sz);
-        m.position.x = (i + 0.5) * (sx / n) - sx / 2;
-        g.add(m);
+        const plunger = new THREE.Group();
+        // 빨간 고무 컵
+        const cup = new THREE.Mesh(this.plungerCupGeo, this.matSpike);
+        cup.position.y = 0.1;
+        plunger.add(cup);
+        // 나무 막대 손잡이
+        const stick = new THREE.Mesh(this.plungerStickGeo, this.matPlungerStick);
+        stick.position.y = 0.45;
+        plunger.add(stick);
+
+        plunger.scale.set(sx / n * 1.1, sy * 0.9, sz);
+        plunger.position.x = (i + 0.5) * (sx / n) - sx / 2;
+        g.add(plunger);
       }
       g.position.set(cx, y0, cz);
       zScale = 1;
     } else {
-      const ball = new THREE.Group();
-      ball.add(new THREE.Mesh(this.rollerGeo, this.matSpike));
-      const inner = new THREE.Mesh(this.rollerGeo, this.matBlock);
-      inner.scale.setScalar(1.08);
-      inner.rotation.set(0.6, 0.6, 0);
-      ball.add(inner);
-      g.add(ball);
-      spin = ball;
+      // 🧻 데굴데굴 굴러오는 거대한 두루마리 휴지 롤 (Toilet Paper Roll)!
+      const roll = new THREE.Group();
+      const outer = new THREE.Mesh(this.tissueOuterGeo, this.matTissueOuter);
+      outer.rotation.z = Math.PI / 2;
+      const innerCore = new THREE.Mesh(this.tissueInnerGeo, this.matTissueCore);
+      innerCore.rotation.z = Math.PI / 2;
+      roll.add(outer, innerCore);
+
+      // 휴지 엠보싱 느낌의 외곽 와이어
+      const wire = new THREE.LineSegments(new THREE.WireframeGeometry(this.tissueOuterGeo), this.lineBlock);
+      wire.rotation.z = Math.PI / 2;
+      roll.add(wire);
+
+      g.add(roll);
+      spin = roll;
       g.position.set(cx, cy, cz);
       zScale = 1;
     }

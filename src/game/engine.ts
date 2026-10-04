@@ -85,6 +85,11 @@ export class GameEngine {
   private scan = layer('dim-scan');
   private vignette = layer('dim-vignette');
   private flashEl = layer('dim-flash');
+  private popupLayer = layer('dim-popups');
+
+  private comboCount = 0;
+  private comboTimer = 0;
+  private lastClearedStage = 0;
 
   private raf = 0;
   private last = 0;
@@ -121,12 +126,12 @@ export class GameEngine {
     this.renderer = renderer;
 
     const bg2d = layer('dim-bg-2d');
-    container.append(bg2d, this.bg3d, cv, this.scan, this.vignette, this.flashEl);
+    container.append(bg2d, this.bg3d, cv, this.scan, this.vignette, this.flashEl, this.popupLayer);
 
-    // lights
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x6a6aa8, 1.7));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-    sun.position.set(-8, 18, 14);
+    // 따뜻하고 화사한 카툰 햇살 조명
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x88ccaa, 2.0));
+    const sun = new THREE.DirectionalLight(0xfff7d6, 2.6);
+    sun.position.set(-6, 22, 16);
     this.scene.add(sun);
 
     this.scene.add(this.world.root);
@@ -202,6 +207,7 @@ export class GameEngine {
     this.world.setTheme(THEMES[0]);
     this.particles.clear();
     this.run = freshRun(this.cfg);
+    this.lastClearedStage = 0;
     this.p = { x: 0, y: 0, z: 0, vy: 0, vz: 0, grounded: true, coyote: 0, jumpBuf: 0 };
     this.mode = '2D_Side';
     this.dim.mode = this.mode;
@@ -222,7 +228,7 @@ export class GameEngine {
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
-    audio.stopMusic();
+    audio.setPaused(true);
     this.emit({ type: 'pause' });
   }
 
@@ -230,7 +236,7 @@ export class GameEngine {
     if (this.state !== 'paused') return;
     this.state = 'playing';
     this.last = performance.now();
-    audio.startMusic();
+    audio.setPaused(false);
   }
 
   revive() {
@@ -591,7 +597,6 @@ export class GameEngine {
     const cy = p.y + 0.9;
     const mag = cfg.magnet;
     const orbs = this.world.orbs;
-    const pal = this.world.cur;
     for (let i = orbs.length - 1; i >= 0; i--) {
       const o = orbs[i];
       if (!o.alive) continue;
@@ -610,11 +615,30 @@ export class GameEngine {
         dz = is3D ? o.z - p.z : 0;
         d2 = dx * dx + dy * dy + dz * dz;
       }
-      if (d2 < 0.9 * 0.9) {
+      if (d2 < 0.95 * 0.95) {
         this.world.removeOrb(o);
         run.orbs += 1;
         run.energy = Math.min(cfg.maxEnergy, run.energy + cfg.orbEnergy);
-        this.particles.burst(o.x, o.y, o.obj.position.z, pal.orb, 9, 4.5, 0.45, 4);
+
+        // 🥕 3색 당근 팡팡 파티클 (주황 당근 + 초록 잎사귀 + 골드 스파클)
+        this.particles.burst(o.x, o.y, o.obj.position.z, '#ff7a00', 12, 5.5, 0.5, 5);
+        this.particles.burst(o.x, o.y + 0.2, o.obj.position.z, '#22c55e', 4, 3.8, 0.4, 4);
+        this.particles.burst(o.x, o.y, o.obj.position.z, '#ffea75', 6, 6.2, 0.6, 2);
+
+        // 콤보 계산 & 팝업 텍스트
+        if (this.comboTimer > 0) {
+          this.comboCount++;
+        } else {
+          this.comboCount = 1;
+        }
+        this.comboTimer = 1.4;
+
+        if (this.comboCount >= 3) {
+          this.showComboPopup(`COMBO x${this.comboCount}! 🥕`, o.x, o.y);
+        } else if (this.comboCount === 2) {
+          this.showComboPopup(`+100!`, o.x, o.y);
+        }
+
         if (!silent) audio.orb();
       }
     }
@@ -625,6 +649,18 @@ export class GameEngine {
   private updatePlaying(dt: number) {
     const { p, run, cfg } = this;
     const is3D = this.mode === '3D_TopDown';
+
+    if (this.comboTimer > 0) {
+      this.comboTimer -= dt;
+      if (this.comboTimer <= 0) this.comboCount = 0;
+    }
+
+    // 🏁 [옵션 1] 500m마다 스테이지 클리어 팡파르 & 다음 테마 자동 워프!
+    const currentStage = Math.floor(p.x / 500);
+    if (currentStage > this.lastClearedStage && currentStage > 0) {
+      this.lastClearedStage = currentStage;
+      this.advanceStage(currentStage);
+    }
 
     this.speed = 10.5 + Math.min(6.5, p.x / 260);
     run.invuln = Math.max(0, run.invuln - dt);
@@ -905,4 +941,53 @@ export class GameEngine {
     this.particles.update(sdt);
     this.renderer.render(this.scene, this.rig.active);
   }
+
+  private advanceStage(stageNum: number) {
+    const { run, cfg } = this;
+    run.zone = stageNum;
+    run.energy = cfg.maxEnergy; // 에너지 보너스 완충!
+    run.invuln = 2.4; // 안전 무적 2.4초
+
+    const theme = THEMES[run.zone % THEMES.length];
+    this.world.setTheme(theme);
+
+    // 카메라 셰이크 & 팡파르
+    this.rig.shake(0.5);
+    this.rig.kickFov(14);
+    this.flash('#ffffff', 0.85, 0.7);
+
+    // 🎊 대형 축하 폭죽 파티클 폭발!
+    this.particles.burst(this.p.x + 3, 3, this.rz(), '#ffd166', 70, 14, 1.2, 3);
+    this.particles.burst(this.p.x + 3, 3, this.rz(), '#ff6b8b', 50, 12, 1.2, 3);
+    this.particles.burst(this.p.x + 3, 3, this.rz(), '#48cae4', 50, 12, 1.2, 3);
+
+    audio.stageClearFanfare();
+    this.emit({
+      type: 'toast',
+      text: `🎉 STAGE ${stageNum} CLEAR! ➔ STAGE ${stageNum + 1}: ${theme.name}`,
+      tone: 'gate',
+    });
+
+    // 화면 중앙에 대형 클리어 배너 팝업!
+    this.showComboPopup(`🏆 STAGE ${stageNum} CLEAR! 🏆`, this.p.x + 2, this.p.y + 2.5);
+  }
+
+  private showComboPopup(msg: string, wx: number, wy: number) {
+    if (!this.popupLayer) return;
+    const v = new THREE.Vector3(wx, wy + 0.6, this.rz());
+    v.project(this.rig.active);
+    const sx = Math.max(10, Math.min(90, (v.x * 0.5 + 0.5) * 100));
+    const sy = Math.max(10, Math.min(90, (-v.y * 0.5 + 0.5) * 100));
+
+    const el = document.createElement('div');
+    el.className = 'dim-combo-popup';
+    el.textContent = msg;
+    el.style.left = `${sx}%`;
+    el.style.top = `${sy}%`;
+    this.popupLayer.appendChild(el);
+    setTimeout(() => {
+      if (el.parentNode === this.popupLayer) this.popupLayer.removeChild(el);
+    }, 750);
+  }
 }
+

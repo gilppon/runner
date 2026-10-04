@@ -162,6 +162,19 @@ export default function App() {
     audio.setMuted(muted);
   }, [muted]);
 
+  // Screen-based BGM synchronization
+  useEffect(() => {
+    if (muted) return;
+    if (screen === 'title' || screen === 'hub') {
+      audio.startLobbyMusic();
+    } else if (screen === 'over') {
+      const t = window.setTimeout(() => {
+        if (!saveRef.current.muted) audio.startLobbyMusic();
+      }, 900);
+      return () => window.clearTimeout(t);
+    }
+  }, [screen, muted]);
+
   // companion follows you in the menu backdrop
   useEffect(() => {
     if (screen === 'title' || screen === 'hub') engineRef.current?.setPet(save.equipped);

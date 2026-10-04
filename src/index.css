@@ -47,25 +47,18 @@ body {
   pointer-events: none;
 }
 .dim-bg-2d {
-  background: linear-gradient(to bottom, var(--sky1, #150a3a) 0%, var(--sky2, #ff4f9a) 100%);
+  background: linear-gradient(to bottom, var(--sky1, #4aa8ff) 0%, var(--sky2, #d8f3ff) 100%);
 }
 .dim-bg-3d {
   opacity: 0;
-  background: radial-gradient(ellipse at 50% 45%, var(--void2, #101a4a) 0%, var(--void1, #04050f) 82%);
+  background: linear-gradient(to bottom, var(--void1, #2b6cb0) 0%, var(--void2, #90cdf4) 100%);
 }
 .dim-scan {
-  opacity: 0.55;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.22) 0px,
-    rgba(0, 0, 0, 0.22) 1px,
-    transparent 1px,
-    transparent 3px
-  );
+  display: none !important;
 }
 .dim-vignette {
   opacity: 0;
-  background: radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.72) 100%);
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(0, 0, 0, 0.28) 100%);
 }
 .dim-flash {
   opacity: 0;
@@ -213,3 +206,38 @@ body {
 .scroll-thin::-webkit-scrollbar { width: 8px; }
 .scroll-thin::-webkit-scrollbar-thumb { background: rgba(140, 160, 255, 0.35); border-radius: 8px; }
 .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+/* 🥕 Talking Tom & StrikeForce Kitty 스타일 Juicy 콤보 팝업 */
+.dim-popups {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 45;
+}
+
+.dim-combo-popup {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-weight: 900;
+  font-size: 1.55rem;
+  letter-spacing: -0.5px;
+  color: #fffb8f;
+  text-shadow: 
+    -2px -2px 0 #b45309,
+     2px -2px 0 #b45309,
+    -2px  2px 0 #b45309,
+     2px  2px 0 #b45309,
+     0 4px 10px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: comboPop 0.75s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  white-space: nowrap;
+}
+
+@keyframes comboPop {
+  0% { transform: translate(-50%, -20%) scale(0.5); opacity: 0; }
+  20% { transform: translate(-50%, -60%) scale(1.3); opacity: 1; }
+  65% { transform: translate(-50%, -90%) scale(1.0); opacity: 0.95; }
+  100% { transform: translate(-50%, -125%) scale(0.85); opacity: 0; }
+}
