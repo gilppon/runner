@@ -10,6 +10,8 @@ export interface DimensionState {
 }
 
 export interface RunConfig {
+  /** Stable procedural route seed. Shared challenges reuse this value. */
+  routeSeed?: number;
   maxEnergy: number;
   startEnergy: number;
   drainMul: number; // multiplier on 3D energy drain
@@ -29,11 +31,20 @@ export interface HintInfo {
   key: string;
   text: string;
   icon: string;
+  urgent?: boolean;
 }
 
 export interface HudState {
   score: number;
   distance: number;
+  stage: number;
+  stageProgress: number;
+  stageRemaining: number;
+  stageMission: string;
+  stageMissionProgress: number;
+  stageMissionTarget: number;
+  stageMissionReward: number;
+  stageMissionStatus: 'active' | 'ready' | 'failed';
   orbs: number;
   lives: number;
   maxLives: number;
@@ -53,10 +64,12 @@ export interface HudState {
 }
 
 export interface RunResult {
+  routeSeed: number;
   score: number;
   distance: number;
   orbs: number;
   gates: number;
+  contractShards: number;
   shards: number;
   petsFound: string[];
   canRevive: boolean;

@@ -59,6 +59,7 @@ export interface Milestone {
 }
 
 export const MILESTONES: Milestone[] = [
+  { key: 'dist', at: 100, shards: 25, icon: '\u{1f3c1}', label: '100 m reached' },
   { key: 'orbs', at: 300, shards: 40, icon: '⬡', label: '300 orbs' },
   { key: 'orbs', at: 1200, shards: 120, icon: '⬡', label: '1,200 orbs' },
   { key: 'gates', at: 10, shards: 80, icon: '✦', label: '10 gates' },

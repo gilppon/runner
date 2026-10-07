@@ -1,13 +1,13 @@
 import { petById } from '../game/content';
-import { dailyStatus, nextMilestone, upcomingMilestone, type SaveData } from '../game/save';
+import { dailyStatus, nextMilestone, upcomingMilestone, type Milestone, type SaveData } from '../game/save';
 
 function Key({ children }: { children: React.ReactNode }) {
   return <span className="keycap mx-0.5 align-middle">{children}</span>;
 }
 
-function msProgress(s: SaveData, at: number): number {
-  const best = Math.max(s.totalOrbs, s.totalGates, s.bestDist);
-  return Math.min(at, best);
+function msProgress(s: SaveData, milestone: Milestone): number {
+  const progress = milestone.key === 'orbs' ? s.totalOrbs : milestone.key === 'gates' ? s.totalGates : s.bestDist;
+  return Math.min(milestone.at, progress);
 }
 
 export function Title({
@@ -53,11 +53,11 @@ export function Title({
             title={ms.label}
             className="glass flex items-center gap-1 rounded-full px-3 py-1.5 font-display text-xs font-bold text-fuchsia-200 anim-pulse-ring"
           >
-            {ms.icon} +{ms.shards}
+            {ms.icon} {ms.label} · CLAIM +{ms.shards}
           </button>
         ) : nextMs ? (
           <span className="glass flex items-center gap-1 rounded-full px-3 py-1.5 font-display text-xs font-bold text-white/50">
-            {nextMs.icon} {msProgress(save, nextMs.at)}/{nextMs.at}
+            {nextMs.icon} NEXT {nextMs.label} · {msProgress(save, nextMs)}/{nextMs.at}
           </span>
         ) : null}
         <div className="glass flex items-center gap-2 rounded-full px-4 py-1.5 font-display text-sm font-bold text-amber-200">
@@ -75,7 +75,7 @@ export function Title({
         </button>
       </div>
 
-      <div className="mb-3 font-display text-[0.65rem] tracking-[0.5em] text-cyan-200/85 sm:text-xs">
+      <div className="mb-2 font-display text-[0.65rem] tracking-[0.5em] text-cyan-200/85 sm:mb-3 sm:text-xs">
         MULTI-DIMENSIONAL RUNNER
       </div>
       <h1 className="font-display text-6xl font-black leading-none sm:text-8xl">
@@ -83,16 +83,16 @@ export function Title({
         <span className="mx-2 text-white/70 sm:mx-4">/</span>
         <span className="logo-3d">3D</span>
       </h1>
-      <div className="mt-4 font-display text-lg font-bold tracking-[0.22em] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)] sm:text-3xl">
+      <div className="mt-3 font-display text-lg font-bold tracking-[0.22em] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)] sm:mt-4 sm:text-3xl">
         DIMENSION SHIFT RUNNER
       </div>
 
-      <p className="mt-4 max-w-xl text-base font-semibold leading-snug text-indigo-50/95 drop-shadow sm:text-xl">
+      <p className="mt-3 max-w-xl text-base font-semibold leading-snug text-indigo-50/95 drop-shadow sm:mt-4 sm:text-xl">
         Run the flat world. Hit a giant wall? Press <Key>SPACE</Key> — the map rotates 90° into a top-down 3D city and you
         can simply <b className="text-fuchsia-300">walk around it</b>. Something is hiding behind those walls…
       </p>
 
-      <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row">
+      <div className="mt-5 flex flex-col items-center gap-3 sm:mt-7 sm:flex-row">
         <button
           disabled={busy}
           onClick={onPlay}
@@ -105,7 +105,7 @@ export function Title({
         </button>
       </div>
 
-      <div className="mt-8 grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-3">
         {[
           {
             t: '2D SIDE-SCROLL',
@@ -130,7 +130,7 @@ export function Title({
         ))}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs font-bold tracking-[0.2em] text-white/70">
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs font-bold tracking-[0.2em] text-white/70 sm:mt-6">
         <span>BEST SCORE {save.best.toLocaleString('en-US')}</span>
         <span>FARTHEST {save.bestDist.toLocaleString('en-US')} m</span>
         <span>RUNS {save.runs}</span>

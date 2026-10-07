@@ -126,8 +126,6 @@ function clonePalette(p: Palette): Palette {
 }
 
 const mod = (a: number, n: number) => ((a % n) + n) % n;
-const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-
 export class World {
   readonly root = new THREE.Group();
   obstacles: Obstacle[] = [];
@@ -141,6 +139,7 @@ export class World {
   private sinceVault = 0;
   private lastPattern: PatternName | '' = '';
   private idc = 0;
+  private seedState: number | null = null;
 
   // shared geometry
   private boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -237,6 +236,20 @@ export class World {
     this.buildTiles();
     this.buildBackdrop();
     this.applyPalette(this.cur); // tile vertex colours are finally tinted here
+  }
+
+  setSeed(seed?: number) {
+    this.seedState = seed !== undefined && Number.isFinite(seed) ? (Math.floor(seed) >>> 0) : null;
+  }
+
+  private random(): number {
+    if (this.seedState === null) return Math.random();
+    this.seedState = (1664525 * this.seedState + 1013904223) >>> 0;
+    return this.seedState / 0x100000000;
+  }
+
+  private rnd(a: number, b: number) {
+    return a + this.random() * (b - a);
   }
 
   // ---- theme ---------------------------------------------------------------
@@ -461,17 +474,17 @@ export class World {
     // 2. ☁️ 둥실둥실 솜사탕 구름 (Fluffy Clouds)
     for (let i = 0; i < CLOUD_N; i++) {
       const cg = new THREE.Group();
-      const parts = 3 + Math.floor(Math.random() * 2);
+      const parts = 3 + Math.floor(this.random() * 2);
       for (let p = 0; p < parts; p++) {
         const m = new THREE.Mesh(sphereGeo, this.matCloud);
-        const r = rnd(1.4, 2.8);
+        const r = this.rnd(1.4, 2.8);
         m.scale.set(r, r * 0.75, r * 0.6);
-        m.position.set((p - parts / 2) * 1.8, rnd(-0.3, 0.4), rnd(-0.2, 0.2));
+        m.position.set((p - parts / 2) * 1.8, this.rnd(-0.3, 0.4), this.rnd(-0.2, 0.2));
         cg.add(m);
       }
-      cg.position.set(0, rnd(14, 26), -rnd(45, 75));
+      cg.position.set(0, this.rnd(14, 26), -this.rnd(45, 75));
       this.root.add(cg);
-      this.clouds.push({ obj: cg, base: (i / CLOUD_N) * CLOUD_SPAN, speed: rnd(0.8, 1.6) });
+      this.clouds.push({ obj: cg, base: (i / CLOUD_N) * CLOUD_SPAN, speed: this.rnd(0.8, 1.6) });
     }
 
     // 3. 🏔️ 겹겹이 중첩된 완만한 카툰 산맥 (Rolling Hills)
@@ -479,13 +492,13 @@ export class World {
       const hg = new THREE.Group();
       const isFar = i % 2 === 0;
       const mat = isFar ? this.matHillFar : this.matHillNear;
-      const radius = isFar ? rnd(16, 26) : rnd(9, 16);
-      const height = isFar ? rnd(18, 34) : rnd(10, 19);
+      const radius = isFar ? this.rnd(16, 26) : this.rnd(9, 16);
+      const height = isFar ? this.rnd(18, 34) : this.rnd(10, 19);
       const hill = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 18), mat);
       hill.position.y = height / 2 - 8;
       hill.scale.set(1.2, 1, 0.75);
       hg.add(hill);
-      hg.position.set(0, 0, isFar ? -rnd(55, 80) : -rnd(32, 48));
+      hg.position.set(0, 0, isFar ? -this.rnd(55, 80) : -this.rnd(32, 48));
       this.root.add(hg);
       this.hills.push({ obj: hg, base: (i / HILL_N) * HILL_SPAN });
     }
@@ -508,9 +521,9 @@ export class World {
       foliage3.position.set(-0.4, 3.3, -0.2);
       tg.add(foliage1, foliage2, foliage3);
 
-      const zSide = (Math.random() < 0.5 ? -1 : 1) * rnd(10, 24);
+      const zSide = (this.random() < 0.5 ? -1 : 1) * this.rnd(10, 24);
       tg.position.set(0, 0, zSide);
-      const sc = rnd(0.85, 1.35);
+      const sc = this.rnd(0.85, 1.35);
       tg.scale.set(sc, sc, sc);
       this.root.add(tg);
       this.trees.push({ obj: tg, base: (i / TREE_N) * TREE_SPAN });
@@ -658,7 +671,7 @@ export class World {
     while (this.nextX < playerX + SPAWN_AHEAD) {
       const x0 = this.nextX;
       const end = this.spawn(x0, speed, dist);
-      const gap = 17 + speed * 0.85 + Math.random() * 6;
+      const gap = 17 + speed * 0.85 + this.random() * 6;
       this.nextX = Math.ceil((end + gap) / TILE) * TILE;
     }
     const jMin = Math.floor(playerX / TILE) - 30;
@@ -675,7 +688,7 @@ export class World {
       return 'vault';
     }
     this.sinceVault++;
-    if (this.sinceVault >= 5 && (Math.random() < 0.4 || this.sinceVault >= 8)) {
+    if (this.sinceVault >= 5 && (this.random() < 0.4 || this.sinceVault >= 8)) {
       this.sinceVault = 0;
       return 'vault';
     }
@@ -691,7 +704,7 @@ export class World {
     ];
     const pool = table.filter(([name, w]) => w > 0 && name !== this.lastPattern);
     const total = pool.reduce((a, [, w]) => a + w, 0);
-    let r = Math.random() * total;
+    let r = this.random() * total;
     for (const [name, w] of pool) {
       r -= w;
       if (r <= 0) return name;
@@ -726,16 +739,17 @@ export class World {
 
   /** Low beam run: standing collides, you must duck (v) to skim under. */
   private pLowBeams(x0: number, speed: number): number {
-    const count = 2 + Math.floor(Math.random() * 2);
+    const count = 2 + Math.floor(this.random() * 2);
     const gap = Math.max(7.5, speed * 0.85);
     const beamH = PLAYER_H_REF * 0.78; // lower than a standing head (1.62)
     for (let i = 0; i < count; i++) {
       const bx = x0 + i * gap;
-      const w = 3.4 + Math.random() * 1.6;
+      const w = 3.4 + this.random() * 1.6;
       this.addObstacle('beam', bx, bx + w, beamH, 9.5, -TRACK_Z, TRACK_Z);
       this.addDecorOrbs(bx + w / 2);
-      // Only the first beam shows the duck hint (once per run, engine caps it at 3)
-      if (i === 0) this.addHint(bx - 9, bx + 4, 'duck', 'Press DOWN to slide under!', '⬇');
+      const beamKey = `duck${i + 1}`;
+      this.addHint(bx - 14, bx, beamKey, 'Beam ahead: press DOWN to slide under.', '⬇');
+      this.addHint(bx, bx + w + 0.5, `${beamKey}Hold`, 'Keep holding DOWN until the beam is behind you.', '⬇');
     }
     return x0 + (count - 1) * gap + 4.5;
   }
@@ -744,8 +758,8 @@ export class World {
 
   /** Giant wall with a walkable gap on one side. 2D: blocked. 3D: walk around. */
   private pWallGap(x0: number): number {
-    const side = Math.random() < 0.5 ? -1 : 1;
-    const edge = 0.6 + Math.random() * 0.8;
+    const side = this.random() < 0.5 ? -1 : 1;
+    const edge = 0.6 + this.random() * 0.8;
     const len = 2.4;
     if (side > 0) this.addObstacle('wall', x0, x0 + len, 0, 9.5, -TRACK_Z, edge);
     else this.addObstacle('wall', x0, x0 + len, 0, 9.5, -edge, TRACK_Z);
@@ -756,13 +770,20 @@ export class World {
     }
     this.addOrb(x0 + len / 2, 1, gc);
     this.addOrb(x0 + len + 2.5, 1, gc);
-    this.addHint(x0 - 30, x0, 'wall', 'Giant wall! Impassable in 2D — press SPACE and walk around it in 3D.', '🧱');
+    const direction = side > 0 ? 'Down' : 'Up';
+    this.addHint(
+      x0 - 30,
+      x0,
+      `wall${direction}`,
+      `Giant wall ahead: shift to 3D, then steer ${direction.toUpperCase()} through the open side.`,
+      String.fromCodePoint(0x1f9f1),
+    );
     return x0 + len;
   }
 
   /** Three staggered giant walls. Stay in 3D and weave. */
   private pSlalom(x0: number): number {
-    let s = Math.random() < 0.5 ? -1 : 1;
+    let s = this.random() < 0.5 ? -1 : 1;
     const spacing = 13;
     const len = 1.8;
     const edge = 0.9;
@@ -774,16 +795,25 @@ export class World {
       const gc = (s * (edge + TRACK_Z)) / 2;
       this.addOrb(x - 4.5, 1, (prevZ + gc) / 2);
       this.addOrb(x + len / 2, 1, gc);
+      const direction = s > 0 ? 'Down' : 'Up';
+      const key = `slalom${direction}${i + 1}`;
+      const action = s > 0 ? 'DOWN' : 'UP';
+      this.addHint(
+        x - 30,
+        x,
+        key,
+        `${i === 0 ? 'Slalom!' : 'Next gap:'} stay in 3D and move ${action}.`,
+        '🌀',
+      );
       prevZ = gc;
       s = -s;
     }
-    this.addHint(x0 - 30, x0, 'slalom', 'Slalom! Stay in 3D and weave through the gaps — watch your energy.', '🌀');
     return x0 + 2 * spacing + len;
   }
 
   /** A pit spanning every depth. 2D only: jump. */
   private pPit(x0: number, speed: number): number {
-    const w = speed < 12.5 ? 4 : speed < 15 ? 6 : Math.random() < 0.5 ? 6 : 8;
+    const w = speed < 12.5 ? 4 : speed < 15 ? 6 : this.random() < 0.5 ? 6 : 8;
     this.addPit(x0, x0 + w);
     // 점프를 유도하는 환상적인 포물선 당근 트레일 7개!
     this.addCarrotTrail(x0 - 2, w + 4, 1, 3.2, 0, 7);
@@ -794,17 +824,24 @@ export class World {
   /** Low blocks: jump in 2D or sidestep in 3D. */
   private pHurdles(x0: number, speed: number): number {
     const spacing = 8 + speed * 0.2;
-    let side = Math.random() < 0.5 ? -1 : 1;
+    let side = this.random() < 0.5 ? -1 : 1;
     for (let i = 0; i < 3; i++) {
       const x = x0 + i * spacing;
+      const direction = side > 0 ? 'Down' : 'Up';
       if (side > 0) this.addObstacle('block', x, x + 1.4, 0, 1.3, -TRACK_Z, 0.9);
       else this.addObstacle('block', x, x + 1.4, 0, 1.3, -0.9, TRACK_Z);
       // 블록 위를 뛰어넘는 아치형 당근 4개 + 우회 레인 당근 4개
       this.addCarrotTrail(x - 1, 3.4, 1.3, 3.0, side > 0 ? -2 : 2, 4);
       this.addCarrotTrail(x - 0.5, 2.5, 0.9, 0.9, side * 2.9, 3);
+      this.addHint(
+        x - 30,
+        x,
+        `hurdle${direction}${i + 1}`,
+        `${i === 0 ? 'Low block ahead' : 'Next low block'}: jump in 2D or move ${direction.toUpperCase()} in 3D.`,
+        '🟧',
+      );
       side = -side;
     }
-    this.addHint(x0 - 30, x0, 'hurdle', 'Low blocks: jump ▲ in 2D — or sidestep in 3D.', '🟧');
     return x0 + 2 * spacing + 1.4;
   }
 
@@ -814,23 +851,21 @@ export class World {
     for (let i = 0; i < 2; i++) {
       const x = x0 + i * 10;
       this.addObstacle('spike', x, x + len, 0, 0.95, -TRACK_Z, TRACK_Z, true);
-      // 가시밭 위를 넘는 탐스러운 아치형 당근 5개
       this.addCarrotTrail(x - 0.5, len + 1, 1.2, 3.3, 0, 5);
+      this.addHint(x - 30, x, `spike${i + 1}`, i === 0 ? 'Full-width spikes ahead: stay in 2D and prepare to jump.' : 'Second spike strip: stay in 2D and jump again.', '⚠️');
     }
-    this.addHint(x0 - 30, x0, 'spike', 'Spikes cover every depth — flatten to 2D and jump.', '⚠️');
     return x0 + 10 + len;
   }
 
-  /** Spike balls sweeping through the depth. 2D: jump. 3D: time the sweep. */
+  /** Spike balls sweep through the depth. 2D: jump. 3D: time the sweep. */
   private pRollers(x0: number): number {
     for (let i = 0; i < 3; i++) {
       const x = x0 + i * 10;
       const o = this.addObstacle('roller', x - 0.6, x + 0.6, 0.05, 1.3, -0.6, 0.6, true);
-      o.motion = { baseZ: 0, amp: 3.3, speed: rnd(1.6, 2.4), phase: rnd(0, 6.28), half: 0.6 };
-      // 데굴데굴 휴지 롤 사이로 이어지는 당근 라인 4개
+      o.motion = { baseZ: 0, amp: 3.3, speed: this.rnd(1.6, 2.4), phase: this.rnd(0, 6.28), half: 0.6 };
       this.addCarrotTrail(x + 1.5, 5, 1, 2.5, 0, 4);
+      this.addHint(x - 30, x, `roller${i + 1}`, i === 0 ? 'Moving spike balls: jump in 2D or steer around them in 3D.' : 'Next spike ball: jump in 2D or steer around its sweep in 3D.', '🔴');
     }
-    this.addHint(x0 - 30, x0, 'roller', 'Spike balls sweep the depth — jump in 2D, or time the sweep in 3D.', '🔴');
     return x0 + 20 + 0.6;
   }
 
@@ -841,7 +876,8 @@ export class World {
     this.addObstacle('platform', x0 + 10, x0 + 14, -6, 1.5, -TRACK_Z - 0.6, TRACK_Z + 0.6);
     // 공중 플랫폼을 딛고 뛰는 대형 점프 당근 아치 8개
     this.addCarrotTrail(x0 + 1, 12, 1.5, 4.3, 0, 8);
-    this.addHint(x0 - 30, x0, 'hop', 'Broken bridge! Hop from pillar to pillar in 2D.', '🌉');
+    this.addHint(x0 - 30, x0, 'hop1', 'Broken bridge! Jump to the first pillar, then jump again.', '🌉');
+    this.addHint(x0 + 3.5, x0 + 8, 'hop2', 'Land on the first pillar and prepare the next jump.', '↗️');
     return x0 + 14;
   }
 
@@ -863,17 +899,24 @@ export class World {
     for (let i = 0; i < 4; i++) this.addOrb(x0 + 2 + i * 3.5, 1, 2.6);
     this.addHint(
       x0 - 32,
-      x0 + 2,
+      x0,
       'vault',
-      'A light beam leaks from behind that wall… go 3D and slip into the hidden lane to reach the Dimension Gate!',
+      'A light beam leaks from behind that wall. Shift to 3D and steer UP before you reach it to enter the hidden lane.',
       '✨',
+    );
+    this.addHint(
+      x0 + 1,
+      x0 + L - 0.3,
+      'vaultGate',
+      'Stay in 3D and keep steering UP to reach the hidden Dimension Gate.',
+      '↖️',
     );
     return x0 + L + 1.2;
   }
 
   /** Decorative orb trail used by the title-screen attract mode. */
   addDecorOrbs(x: number) {
-    const zc = rnd(-2.5, 2.5);
+    const zc = this.rnd(-2.5, 2.5);
     for (let i = 0; i < 7; i++) {
       const t = i / 6;
       this.addOrb(x + i * 1.6, 1 + Math.sin(t * Math.PI) * 1.4, zc + Math.sin(t * Math.PI * 2) * 1.5);
@@ -933,7 +976,7 @@ export class World {
     o.z = z;
     o.front = front;
     o.alive = true;
-    o.phase = Math.random() * 6.28;
+    o.phase = this.random() * 6.28;
     o.obj.visible = true;
     o.obj.position.set(x, y, z);
     this.orbs.push(o);

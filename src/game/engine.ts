@@ -22,10 +22,44 @@ import type {
 
 const GRAVITY = 36;
 const JUMP_V = 12.8;
+const JUMP_BUFFER_SECONDS = 0.22;
 const STEER = 9.5;
 const PLAYER_H = 1.7;
 export const BASE_DRAIN = 7.5; // energy / sec while in 3D (before upgrades)
 const BASE_SHIFT_COST = 12;
+const HINT_URGENT_WINDOW: Record<string, number> = {
+  pit: 3.5,
+  hurdleUp1: 4.5,
+  hurdleDown1: 4.5,
+  hurdleUp2: 4.5,
+  hurdleDown2: 4.5,
+  hurdleUp3: 4.5,
+  hurdleDown3: 4.5,
+  spike1: 4,
+  spike2: 4,
+  roller1: 4.5,
+  roller2: 4.5,
+  roller3: 4.5,
+  wallUp: 10,
+  wallDown: 10,
+  vault: 12,
+  vaultGate: 10,
+  duck: 5,
+  duck1: 5,
+  duck2: 5,
+  duck3: 5,
+  duck1Hold: 0.8,
+  duck2Hold: 0.8,
+  duck3Hold: 0.8,
+  hop1: 2.8,
+  hop2: 2.5,
+  slalomDown1: 10,
+  slalomUp2: 10,
+  slalomDown3: 10,
+  slalomUp1: 10,
+  slalomDown2: 10,
+  slalomUp3: 10,
+};
 
 type State = 'menu' | 'playing' | 'paused' | 'dead';
 
@@ -33,7 +67,13 @@ interface RunState {
   lives: number;
   energy: number;
   orbs: number;
+  comboBonus: number;
+  nearMissBonus: number;
   gates: number;
+  stageOrbs: number;
+  stageGates: number;
+  stageHits: number;
+  contractShards: number;
   zone: number;
   invuln: number;
   shiftCd: number;
@@ -45,13 +85,31 @@ const freshRun = (cfg: RunConfig): RunState => ({
   lives: cfg.lives,
   energy: cfg.startEnergy,
   orbs: 0,
+  comboBonus: 0,
+  nearMissBonus: 0,
   gates: 0,
+  stageOrbs: 0,
+  stageGates: 0,
+  stageHits: 0,
+  contractShards: 0,
   zone: 0,
   invuln: 0,
   shiftCd: 0,
   petsFound: [],
   revived: false,
 });
+
+type StageMission = { key: 'carrots' | 'gate' | 'clean'; title: string; target: number; reward: number };
+
+function stageMissionFor(stage: number): StageMission {
+  const cycle = Math.floor((stage - 1) / 3);
+  const missions: StageMission[] = [
+    { key: 'carrots', title: 'CARROT HAUL', target: 36 + cycle * 6, reward: 25 + cycle * 5 },
+    { key: 'gate', title: 'HIDDEN GATE', target: 1, reward: 30 + cycle * 5 },
+    { key: 'clean', title: 'NO-HIT SPRINT', target: 500, reward: 45 + cycle * 5 },
+  ];
+  return missions[(stage - 1) % missions.length];
+}
 
 const layer = (cls: string) => {
   const d = document.createElement('div');
@@ -89,6 +147,7 @@ export class GameEngine {
 
   private comboCount = 0;
   private comboTimer = 0;
+  private nearMissed = new Set<number>();
   private lastClearedStage = 0;
 
   private raf = 0;
@@ -202,12 +261,15 @@ export class GameEngine {
   }
 
   startRun(cfg: RunConfig) {
-    this.cfg = { ...cfg, hintCounts: { ...cfg.hintCounts } };
+    const routeSeed = cfg.routeSeed ?? (Math.floor(Math.random() * 0x100000000) >>> 0);
+    this.cfg = { ...cfg, routeSeed, hintCounts: { ...cfg.hintCounts } };
+    this.world.setSeed(routeSeed);
     this.world.reset();
     this.world.setTheme(THEMES[0]);
     this.particles.clear();
     this.run = freshRun(this.cfg);
     this.lastClearedStage = 0;
+    this.nearMissed.clear();
     this.p = { x: 0, y: 0, z: 0, vy: 0, vz: 0, grounded: true, coyote: 0, jumpBuf: 0 };
     this.mode = '2D_Side';
     this.dim.mode = this.mode;
@@ -310,7 +372,7 @@ export class GameEngine {
   private setUp(src: 'key' | 'touch', down: boolean) {
     if (src === 'key') this.input.upKey = down;
     else this.input.upTouch = down;
-    if (down && this.state === 'playing' && this.mode === '2D_Side') this.p.jumpBuf = 0.13;
+    if (down && this.state === 'playing' && this.mode === '2D_Side') this.p.jumpBuf = JUMP_BUFFER_SECONDS;
   }
 
   private onKeyDown = (ev: KeyboardEvent) => {
@@ -331,10 +393,6 @@ export class GameEngine {
       case 'KeyS':
         if (playing) ev.preventDefault();
         this.input.downKey = true;
-        break;
-      case 'KeyP':
-      case 'Escape':
-        if (playing && !ev.repeat) this.pause();
         break;
     }
   };
@@ -418,7 +476,7 @@ export class GameEngine {
 
   private get score() {
     const r = this.run;
-    return Math.floor((Math.max(0, this.p.x) + r.orbs * 10 + r.gates * 300) * this.cfg.scoreMul);
+    return Math.floor((Math.max(0, this.p.x) + r.orbs * 10 + r.comboBonus + r.nearMissBonus + r.gates * 300) * this.cfg.scoreMul);
   }
 
   /**
@@ -499,6 +557,29 @@ export class GameEngine {
     return null;
   }
 
+  /** Reward one close, clean pass after the collision check has already cleared it. */
+  private awardNearMisses() {
+    const { p, run } = this;
+    if (run.invuln > 0) return;
+    const is3D = this.mode === '3D_TopDown';
+    const bodyHeight = PLAYER_H * (this.duck > 0.05 ? 0.45 : 1);
+    for (const o of this.world.obstacles) {
+      if (!o.deadly || this.nearMissed.has(o.id) || p.x < o.x1 + 0.28) continue;
+      this.nearMissed.add(o.id);
+
+      const gapX = Math.max(0, p.x - 0.28 - o.x1);
+      const gapY = Math.max(o.y0 - (p.y + bodyHeight), p.y - o.y1, 0);
+      const gapZ = is3D ? Math.max(o.z0 - (p.z + 0.26), p.z - 0.26 - o.z1, 0) : 0;
+      const clearance = Math.hypot(gapX, gapY, gapZ);
+      if (clearance < 0.08 || clearance > 0.65) continue;
+
+      run.nearMissBonus += 50;
+      this.showComboPopup('NEAR MISS · +50', o.x1, p.y + bodyHeight + 0.2);
+      this.particles.burst(o.x1, p.y + bodyHeight, this.rz(), '#67e8f9', 8, 4.5, 0.42, 5);
+      this.pushHud();
+    }
+  }
+
   private findSafeX(start: number): number {
     const w = this.world;
     for (let x = Math.ceil(start * 2) / 2; x < start + 60; x += 0.5) {
@@ -518,6 +599,9 @@ export class GameEngine {
   private crash(o: Obstacle | null) {
     const { p, run } = this;
     run.lives -= 1;
+    run.stageHits += 1;
+    this.comboCount = 0;
+    this.comboTimer = 0;
     audio.crash();
     this.rig.shake(0.9);
     this.flash('#ff2a4d', 0.4, 0.45);
@@ -547,12 +631,15 @@ export class GameEngine {
     this.rig.shake(1.3);
     const { run, p, cfg } = this;
     const shards = Math.floor((p.x / 45 + run.orbs * 0.6 + run.gates * 12) * cfg.shardMul);
+    const contractShards = run.contractShards;
     const result: RunResult = {
+      routeSeed: cfg.routeSeed ?? 0,
       score: this.score,
       distance: Math.max(0, Math.floor(p.x)),
       orbs: run.orbs,
       gates: run.gates,
-      shards,
+      contractShards,
+      shards: shards + contractShards,
       petsFound: [...run.petsFound],
       canRevive: !run.revived,
     };
@@ -564,6 +651,7 @@ export class GameEngine {
     const { p, run, cfg } = this;
     pt.used = true;
     run.gates += 1;
+    run.stageGates += 1;
     run.zone += 1;
     run.energy = cfg.maxEnergy;
     run.invuln = 1.4;
@@ -591,7 +679,7 @@ export class GameEngine {
     this.pushHud();
   }
 
-  private collectOrbs(dt: number, silent = false) {
+  private collectOrbs(dt: number, attractMode = false) {
     const { p, run, cfg } = this;
     const is3D = this.mode === '3D_TopDown';
     const cy = p.y + 0.9;
@@ -617,7 +705,10 @@ export class GameEngine {
       }
       if (d2 < 0.95 * 0.95) {
         this.world.removeOrb(o);
+        // Menu attract orbs are decoration only; never grant run rewards or spam combo popups.
+        if (attractMode) continue;
         run.orbs += 1;
+        run.stageOrbs += 1;
         run.energy = Math.min(cfg.maxEnergy, run.energy + cfg.orbEnergy);
 
         // 🥕 3색 당근 팡팡 파티클 (주황 당근 + 초록 잎사귀 + 골드 스파클)
@@ -627,19 +718,19 @@ export class GameEngine {
 
         // 콤보 계산 & 팝업 텍스트
         if (this.comboTimer > 0) {
-          this.comboCount++;
+          this.comboCount = Math.min(5, this.comboCount + 1);
         } else {
           this.comboCount = 1;
         }
         this.comboTimer = 1.4;
 
-        if (this.comboCount >= 3) {
-          this.showComboPopup(`COMBO x${this.comboCount}! 🥕`, o.x, o.y);
-        } else if (this.comboCount === 2) {
-          this.showComboPopup(`+100!`, o.x, o.y);
+        if (this.comboCount >= 2) {
+          const bonus = (this.comboCount - 1) * 10;
+          run.comboBonus += bonus;
+          this.showComboPopup(`CARROT CHAIN x${this.comboCount} · +${bonus} BONUS 🥕`, o.x, o.y);
         }
 
-        if (!silent) audio.orb();
+        audio.orb();
       }
     }
   }
@@ -655,19 +746,19 @@ export class GameEngine {
       if (this.comboTimer <= 0) this.comboCount = 0;
     }
 
-    // 🏁 [옵션 1] 500m마다 스테이지 클리어 팡파르 & 다음 테마 자동 워프!
-    const currentStage = Math.floor(p.x / 500);
-    if (currentStage > this.lastClearedStage && currentStage > 0) {
-      this.lastClearedStage = currentStage;
-      this.advanceStage(currentStage);
-    }
-
     this.speed = 10.5 + Math.min(6.5, p.x / 260);
     run.invuln = Math.max(0, run.invuln - dt);
     run.shiftCd = Math.max(0, run.shiftCd - dt);
 
     // horizontal movement: auto-run + depth steering in 3D
     p.x += this.speed * dt;
+    // Resolve a stage boundary before collecting anything beyond it so the
+    // prior stage's contract cannot receive rewards from the next segment.
+    const currentStage = Math.floor(p.x / 500);
+    if (currentStage > this.lastClearedStage && currentStage > 0) {
+      this.lastClearedStage = currentStage;
+      this.advanceStage(currentStage);
+    }
     if (is3D) {
       const steer = (this.down ? 1 : 0) - (this.up ? 1 : 0);
       p.vz = damp(p.vz, steer * STEER, 16, dt);
@@ -725,6 +816,8 @@ export class GameEngine {
       return;
     }
 
+    this.awardNearMisses();
+
     this.collectOrbs(dt);
 
     // hidden dimension gate (only reachable in 3D)
@@ -769,12 +862,64 @@ export class GameEngine {
 
   private updateHints() {
     const p = this.p;
+    const is3D = this.mode === '3D_TopDown';
     let hint: HintInfo | null = null;
     for (const h of this.world.hints) {
       if (p.x < h.x || p.x > h.until) continue;
       const seen = this.cfg.hintCounts[h.key] ?? 0;
-      if (seen >= 3 && !h.shown) continue;
-      hint = { key: h.key, text: h.text, icon: h.icon };
+      const remaining = h.until - p.x;
+      let urgentWindow = HINT_URGENT_WINDOW[h.key] ?? 0;
+      if (h.key.startsWith('spike')) urgentWindow = Math.min(urgentWindow, this.speed * 0.28);
+      if (h.key.startsWith('roller')) urgentWindow = Math.min(7, this.speed * 0.42);
+      const urgent = remaining <= urgentWindow;
+      const requiresEarlyCue =
+        is3D || h.key === 'vault' || h.key === 'vaultGate' || h.key.startsWith('wall') || h.key.startsWith('slalom');
+      if (seen >= 3 && !h.shown && !urgent && !requiresEarlyCue) continue;
+      let text = h.text;
+      if (urgent) {
+        if (h.key.startsWith('duck')) {
+          const holding = h.key.endsWith('Hold');
+          text = holding
+            ? is3D ? 'SHIFT TO 2D — KEEP SLIDING!' : 'KEEP SLIDING UNTIL CLEAR!'
+            : is3D ? 'SHIFT TO 2D, THEN SLIDE!' : 'SLIDE NOW!';
+        }
+        else if (h.key === 'pit' || h.key.startsWith('spike')) text = is3D ? 'SHIFT 2D + JUMP!' : 'JUMP NOW!';
+        else if (h.key === 'vault') text = is3D ? 'MOVE UP BEFORE THE WALL!' : 'SHIFT 3D + UP BEFORE THE WALL!';
+        else if (h.key === 'vaultGate') text = is3D ? 'STAY 3D + MOVE UP TO THE GATE!' : 'SHIFT 3D + UP TO THE GATE!';
+        else if (h.key.startsWith('hurdle')) {
+          const direction = h.key.includes('Down') ? 'DOWN' : 'UP';
+          text = is3D ? `MOVE ${direction} AROUND BLOCK!` : 'JUMP NOW!';
+        }
+        else if (h.key.startsWith('roller')) text = is3D ? 'SHIFT 2D + JUMP!' : 'JUMP NOW!';
+        else if (h.key === 'hop1') text = is3D ? 'SHIFT 2D + JUMP TO PILLAR!' : 'JUMP TO PILLAR!';
+        else if (h.key === 'hop2') text = is3D ? 'SHIFT 2D + JUMP AGAIN!' : 'JUMP TO NEXT PILLAR!';
+        else if (h.key.startsWith('slalom')) {
+          const direction = h.key.includes('Down') ? 'DOWN' : 'UP';
+          text = is3D ? `MOVE ${direction} THROUGH GAP!` : `SHIFT 3D + ${direction}!`;
+        } else if (h.key === 'wallUp' || h.key === 'wallDown') {
+          const direction = h.key === 'wallDown' ? 'DOWN' : 'UP';
+          text = is3D ? `MOVE ${direction} THROUGH GAP!` : `SHIFT 3D + ${direction}!`;
+        }
+      } else if (h.key === 'wallUp' || h.key === 'wallDown') {
+        const direction = h.key === 'wallDown' ? 'DOWN' : 'UP';
+        text = is3D ? `Steer ${direction} through the open side.` : `Shift to 3D, then steer ${direction}.`;
+      } else if (h.key === 'vault') {
+        text = is3D ? 'Steer UP around the wall to enter the hidden lane.' : h.text;
+      } else if (h.key === 'vaultGate') {
+        text = is3D ? 'Stay in 3D and keep steering UP to the gate.' : 'Shift to 3D and steer UP to the gate.';
+      } else if (h.key.startsWith('spike') && is3D) {
+        text = 'Shift to 2D before the full-width spikes.';
+      } else if (h.key.startsWith('duck')) {
+        text = h.key.endsWith('Hold')
+          ? is3D ? 'Shift to 2D and keep holding DOWN until the beam is clear.' : 'Keep holding DOWN until the beam is clear.'
+          : is3D ? 'Shift to 2D, then press DOWN to slide under.' : h.text;
+      }
+      hint = {
+        key: h.key,
+        text,
+        icon: h.icon,
+        urgent,
+      };
       if (!h.shown) {
         h.shown = true;
         this.cfg.hintCounts[h.key] = seen + 1;
@@ -817,14 +962,23 @@ export class GameEngine {
   }
 
   private pushHud() {
+    // Position and dimension may change outside the normal update tick (crash recovery, gates, input).
+    // Refresh the contextual cue before publishing HUD state so stale directions are never shown.
+    if (this.state === 'playing') this.updateHints();
     this.onHud(this.getHud());
   }
 
   private getHud(): HudState {
     const r = this.run;
+    const distance = Math.max(0, Math.floor(this.p.x));
+    const stage = Math.floor(distance / 500) + 1;
     return {
       score: this.score,
-      distance: Math.max(0, Math.floor(this.p.x)),
+      distance,
+      stage,
+      stageProgress: (distance % 500) / 500,
+      stageRemaining: stage * 500 - distance,
+      ...this.getStageMissionHud(stage, distance),
       orbs: r.orbs,
       lives: r.lives,
       maxLives: this.cfg.lives,
@@ -841,6 +995,30 @@ export class GameEngine {
       invuln: r.invuln > 0,
       gates: r.gates,
       hint: this.activeHint,
+    };
+  }
+
+  private getStageMissionHud(stage: number, distance: number): Pick<HudState,
+    'stageMission' | 'stageMissionProgress' | 'stageMissionTarget' | 'stageMissionReward' | 'stageMissionStatus'
+  > {
+    const mission = stageMissionFor(stage);
+    const run = this.run;
+    const progress = mission.key === 'carrots'
+      ? run.stageOrbs
+      : mission.key === 'gate'
+        ? run.stageGates
+        : distance % 500;
+    const status = mission.key === 'clean' && run.stageHits > 0
+      ? 'failed'
+      : progress >= mission.target
+        ? 'ready'
+        : 'active';
+    return {
+      stageMission: mission.title,
+      stageMissionProgress: Math.min(progress, mission.target),
+      stageMissionTarget: mission.target,
+      stageMissionReward: Math.floor(mission.reward * this.cfg.shardMul),
+      stageMissionStatus: status,
     };
   }
 
@@ -944,11 +1122,32 @@ export class GameEngine {
 
   private advanceStage(stageNum: number) {
     const { run, cfg } = this;
-    run.zone = stageNum;
+    const mission = stageMissionFor(stageNum);
+    const missionProgress = mission.key === 'carrots'
+      ? run.stageOrbs
+      : mission.key === 'gate'
+        ? run.stageGates
+        : run.stageHits === 0 ? mission.target : 0;
+    if (missionProgress >= mission.target) {
+      const reward = Math.floor(mission.reward * cfg.shardMul);
+      run.contractShards += reward;
+      this.emit({ type: 'toast', text: `🏁 ${mission.title} COMPLETE · +${reward} SHARDS BANKED`, tone: 'good' });
+    } else {
+      this.emit({ type: 'toast', text: `CONTRACT MISSED · ${mission.title}`, tone: 'info' });
+    }
+    run.stageOrbs = 0;
+    run.stageGates = 0;
+    run.stageHits = 0;
+    const previousZone = run.zone;
+    // Hidden gates can advance zones before distance-based stages; never rewind progress.
+    run.zone = Math.max(run.zone, stageNum);
     run.energy = cfg.maxEnergy; // 에너지 보너스 완충!
     run.invuln = 2.4; // 안전 무적 2.4초
 
     const theme = THEMES[run.zone % THEMES.length];
+    const zoneNotice = run.zone > previousZone
+      ? `➔ ZONE ${run.zone + 1}: ${theme.name}`
+      : `ZONE ${run.zone + 1} CONTINUES · ${theme.name}`;
     this.world.setTheme(theme);
 
     // 카메라 셰이크 & 팡파르
@@ -964,7 +1163,7 @@ export class GameEngine {
     audio.stageClearFanfare();
     this.emit({
       type: 'toast',
-      text: `🎉 STAGE ${stageNum} CLEAR! ➔ STAGE ${stageNum + 1}: ${theme.name}`,
+      text: `🎉 STAGE ${stageNum} CLEAR! ${zoneNotice}`,
       tone: 'gate',
     });
 

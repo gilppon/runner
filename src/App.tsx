@@ -12,6 +12,7 @@ import type { SaveData } from './game/save';
 import { audio } from './game/audio';
 import { poki } from './game/poki';
 import { petById } from './game/content';
+import { readRunnerChallenge } from './game/share';
 import type { EngineEvent, HudState, RunResult, ToastTone } from './game/types';
 import { Hud, Toasts } from './components/Hud';
 import type { ToastItem } from './components/Hud';
@@ -48,6 +49,7 @@ export default function App() {
   const [hud, setHud] = useState<HudState | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
+  const [challenge] = useState(readRunnerChallenge);
   const [newBest, setNewBest] = useState(false);
   const [doubled, setDoubled] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -183,6 +185,7 @@ export default function App() {
   // ------------------------------------------------------------------ actions
 
   const toggleMute = useCallback(() => {
+    audio.unlock(); // First audio context creation must follow a user gesture.
     setMuted((m) => {
       const next = !m;
       audio.setMuted(next);
@@ -200,7 +203,7 @@ export default function App() {
     (document.activeElement as HTMLElement | null)?.blur?.();
     try {
       await poki.commercialBreak(); // Poki: natural break before gameplay
-      engineRef.current?.startRun(buildRunConfig(saveRef.current));
+      engineRef.current?.startRun({ ...buildRunConfig(saveRef.current), routeSeed: challenge?.seed });
       setResult(null);
       setScreen('playing');
       poki.gameplayStart(); // Poki: gameplayStart
@@ -208,7 +211,7 @@ export default function App() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, []);
+  }, [challenge]);
 
   // Resume must not break run continuity, so no interstitial there (portal review violation)
   const resume = useCallback(() => {
@@ -281,7 +284,11 @@ export default function App() {
       if (e.code === 'KeyM') toggleMute();
       const s = screenRef.current;
       if (e.code === 'Enter' && (s === 'title' || s === 'over')) void startRun();
-      else if ((e.code === 'KeyP' || e.code === 'Escape') && s === 'paused') resume();
+      else if (e.code === 'KeyP' || e.code === 'Escape') {
+        e.preventDefault();
+        if (s === 'paused') resume();
+        else if (s === 'playing') engineRef.current?.pause();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -329,6 +336,20 @@ export default function App() {
             })
           }
         />
+      )}
+      {screen === 'title' && challenge && (
+        <div className="fixed left-1/2 top-3 z-40 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border-2 border-amber-300 bg-stone-950/95 p-3 text-center text-amber-100 shadow-xl">
+          <div className="text-xs font-black tracking-widest text-amber-300">FRIEND’S CARROT RUN</div>
+          <div className="mt-1 text-sm font-bold">
+            {challenge.score.toLocaleString('en-US')} points · {challenge.distance}m · 🥕 {challenge.orbs} · 🌀 {challenge.gates}
+          </div>
+          <p className="mt-1 text-[11px] text-amber-100/70">
+            {challenge.seed === undefined ? 'Score target only · this older link has no saved course.' : 'Same course and score target. Can you beat it?'}
+          </p>
+          <button onClick={() => void startRun()} disabled={busy} className="mt-2 rounded-full bg-amber-300 px-4 py-1.5 text-xs font-black text-stone-950 disabled:opacity-50">
+            Race this score
+          </button>
+        </div>
       )}
 
       {screen === 'hub' && (

@@ -77,6 +77,51 @@ export function Hud({
             <span className="text-cyan-200">⬡ {hud.orbs}</span>
             {hud.gates > 0 && <span className="text-fuchsia-300">✦ {hud.gates}</span>}
           </div>
+          <div className="mt-1.5 w-36 rounded-md border border-white/15 bg-slate-950/55 px-1.5 py-1 shadow-sm backdrop-blur sm:w-44">
+            <div className="mb-1 flex items-center justify-between font-display text-[0.48rem] font-bold tracking-[0.14em] text-white/80 sm:text-[0.55rem]">
+              <span>STAGE {hud.stage}</span>
+              <span>{hud.stageRemaining}m TO CLEAR</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={`Stage ${hud.stage} progress`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.floor(hud.stageProgress * 100)}
+              className="h-1 overflow-hidden rounded-full bg-white/15"
+            >
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 shadow-[0_0_8px_rgba(251,146,60,0.8)] transition-[width] duration-200"
+                style={{ width: `${hud.stageProgress * 100}%` }}
+              />
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-1 font-display text-[0.45rem] font-bold tracking-[0.1em] text-white/85 sm:text-[0.5rem]">
+              <span className="truncate">{hud.stageMission}</span>
+              <span className={hud.stageMissionStatus === 'ready' ? 'shrink-0 text-emerald-300' : hud.stageMissionStatus === 'failed' ? 'shrink-0 text-rose-300' : 'shrink-0 text-amber-200'}>
+                {hud.stageMissionStatus === 'ready'
+                  ? 'READY'
+                  : hud.stageMissionStatus === 'failed'
+                    ? 'FAILED'
+                    : `${Math.floor(hud.stageMissionProgress)}/${hud.stageMissionTarget}`}
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={`${hud.stageMission} contract`}
+              aria-valuemin={0}
+              aria-valuemax={hud.stageMissionTarget}
+              aria-valuenow={Math.floor(hud.stageMissionProgress)}
+              className="mt-1 h-1 overflow-hidden rounded-full bg-white/15"
+            >
+              <div
+                className={`h-full rounded-full transition-[width] duration-200 ${hud.stageMissionStatus === 'failed' ? 'bg-rose-400' : hud.stageMissionStatus === 'ready' ? 'bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]' : 'bg-gradient-to-r from-cyan-300 to-emerald-300'}`}
+                style={{ width: `${(hud.stageMissionProgress / hud.stageMissionTarget) * 100}%` }}
+              />
+            </div>
+            <div className="mt-0.5 text-right font-display text-[0.42rem] font-bold tracking-[0.1em] text-amber-200/80">
+              +{hud.stageMissionReward} SHARDS
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col items-center gap-1">
@@ -121,7 +166,7 @@ export function Hud({
       </div>
 
       {/* energy gauge */}
-      <div className="absolute left-1/2 top-[5.4rem] w-[min(92vw,520px)] -translate-x-1/2 sm:top-[6.4rem]">
+      <div className="absolute left-1/2 top-[9.6rem] w-[min(92vw,520px)] -translate-x-1/2 sm:top-[6.4rem]">
         <div className="mb-1 flex items-end justify-between px-1 font-display text-[0.62rem] font-bold tracking-[0.2em] text-white/85 sm:text-xs">
           <span>DIMENSION ENERGY</span>
           <span className={low ? 'text-rose-300' : ''}>
@@ -171,7 +216,11 @@ export function Hud({
       {hud.hint && (
         <div
           key={hud.hint.key}
-        className="anim-hint glass absolute left-1/2 top-[10.4rem] w-[min(92vw,640px)] rounded-xl border-amber-300/50 px-3 py-2 text-center text-xs font-bold text-amber-50 sm:top-[11.6rem] sm:px-4 sm:text-base"
+          className={`anim-hint glass absolute left-1/2 top-[14.8rem] w-[min(92vw,640px)] rounded-xl border px-3 py-2 text-center text-xs font-bold sm:top-[11.6rem] sm:px-4 sm:text-base ${
+            hud.hint.urgent
+              ? 'animate-pulse border-rose-300 bg-rose-950/80 text-rose-50'
+              : 'border-amber-300/50 text-amber-50'
+          }`}
         >
           <span className="mr-2 text-lg">{hud.hint.icon}</span>
           {hud.hint.text}

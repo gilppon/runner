@@ -20,6 +20,8 @@ class AudioManager {
   private musicFilter: BiquadFilterNode | null = null;
 
   private timer: number | null = null;
+  private nextNoteTime = 0;
+  private schedulingAt: number | null = null;
   private currentTrack: MusicTrack = 'none';
   private step = 0;
   private is3D = false;
@@ -95,7 +97,8 @@ class AudioManager {
   private tone(freq: number, dur: number, type: Wave, vol: number, o: ToneOpts = {}) {
     const ctx = this.ctx;
     if (!ctx || !this.master) return;
-    const t0 = ctx.currentTime + (o.delay ?? 0);
+    const baseTime = this.schedulingAt ?? ctx.currentTime;
+    const t0 = Math.max(ctx.currentTime, baseTime + (o.delay ?? 0));
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
 
@@ -118,7 +121,8 @@ class AudioManager {
   private noise(dur: number, vol: number, hp: number, delay = 0, dest?: AudioNode) {
     const ctx = this.ctx;
     if (!ctx || !this.master) return;
-    const t0 = ctx.currentTime + delay;
+    const baseTime = this.schedulingAt ?? ctx.currentTime;
+    const t0 = Math.max(ctx.currentTime, baseTime + delay);
     const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = buf.getChannelData(0);
@@ -244,17 +248,37 @@ class AudioManager {
   playTrack(track: MusicTrack) {
     if (this.currentTrack === track && this.timer !== null) return;
     this.stopMusic();
-    this.unlock();
     this.currentTrack = track;
     this.step = 0;
     this.isPaused = false;
+    this.schedulingAt = null;
+    this.nextNoteTime = (this.ctx?.currentTime ?? 0) + 0.04;
+    if (track !== 'none') {
+      this.timer = window.setInterval(() => this.scheduleMusic(), 25);
+      this.scheduleMusic();
+    }
+  }
 
-    if (track === 'lobby') {
-      // 104 BPM 로비 템포 (스텝당 144ms)
-      this.timer = window.setInterval(() => this.tickLobby(), 144);
-    } else if (track === 'game') {
-      // 136 BPM 인게임 런 템포 (스텝당 110ms)
-      this.timer = window.setInterval(() => this.tickGame(), 110);
+  /** Schedule notes against AudioContext time so render stalls do not shift the beat. */
+  private scheduleMusic() {
+    const ctx = this.ctx;
+    const track = this.currentTrack;
+    if (!ctx || track === 'none' || ctx.state !== 'running') return;
+
+    const stepDuration = track === 'lobby' ? 60 / 104 / 4 : 60 / 136 / 4;
+    if (this.nextNoteTime < ctx.currentTime - stepDuration * 0.5) {
+      const missedSteps = Math.ceil((ctx.currentTime + 0.015 - this.nextNoteTime) / stepDuration);
+      this.step += missedSteps;
+      this.nextNoteTime += missedSteps * stepDuration;
+    }
+
+    const horizon = ctx.currentTime + 0.12;
+    while (this.nextNoteTime <= horizon) {
+      this.schedulingAt = this.nextNoteTime;
+      if (track === 'lobby') this.tickLobby();
+      else this.tickGame();
+      this.schedulingAt = null;
+      this.nextNoteTime += stepDuration;
     }
   }
 
@@ -271,6 +295,7 @@ class AudioManager {
       window.clearInterval(this.timer);
       this.timer = null;
     }
+    this.schedulingAt = null;
     this.currentTrack = 'none';
   }
 
@@ -351,7 +376,10 @@ class AudioManager {
     const ctx = this.ctx;
     if (!ctx || !this.musicFilter || this.muted || this.adMuted) return;
     const dest = this.musicFilter;
-    const s = this.step++ % 32;
+    const s = this.step++ % 128;
+    const phraseStep = s % 32;
+    const phraseIndex = Math.floor(s / 32);
+    const answerPhrase = phraseIndex % 2 === 1;
 
     // 1. 🥁 파워풀 펀치 드럼 세트
     // 쿵! 킥 드럼 (스텝 0, 8, 16, 24)
@@ -364,7 +392,7 @@ class AudioManager {
       this.tone(220, 0.09, 'triangle', 0.18, { slide: 90, dest });
     }
     // 칫-칫- 16비트 경쾌한 하이햇 (모든 홀수 스텝)
-    if (s % 2 === 1) {
+    if (s % 2 === 1 && !(answerPhrase && s % 8 === 7)) {
       this.noise(0.04, 0.08, 7000, 0, dest);
     }
     // 통! 카툰 우드블록 퍼커션 (스텝 6, 14, 22, 30)
@@ -379,7 +407,7 @@ class AudioManager {
       55.0, 55.0, 110.0, 55.0, 55.0, 110.0, 82.41, 98.0,       // Am (16-23)
       43.65, 43.65, 87.31, 43.65, 65.41, 87.31, 98.0, 116.54,   // F (24-31)
     ];
-    this.tone(bassRoots[s], 0.14, this.is3D ? 'sawtooth' : 'triangle', 0.32, { dest });
+    this.tone(bassRoots[phraseStep], 0.14, this.is3D ? 'sawtooth' : 'triangle', 0.32, { dest });
 
     // 3. 🎹 풍성한 3성부 화음 스타카토 브라스 (스텝 2, 4, 10, 12, 18, 20, 26, 28)
     const chordVoicings = [
@@ -388,11 +416,11 @@ class AudioManager {
       [220.0, 261.63, 329.63], // A min
       [220.0, 261.63, 349.23], // F maj
     ];
-    const curChord = chordVoicings[Math.floor(s / 8)];
+    const curChord = chordVoicings[Math.floor(phraseStep / 8)];
     if (s % 4 === 2 || s % 8 === 4) {
       curChord.forEach((f) => {
-        this.tone(f, 0.12, 'square', 0.14, { dest });
-        this.tone(f * 2, 0.1, 'sine', 0.1, { dest });
+        this.tone(f, 0.12, 'triangle', 0.1, { dest });
+        this.tone(f * 2, 0.1, 'sine', 0.06, { dest });
       });
     }
 
@@ -416,12 +444,80 @@ class AudioManager {
       30: 1046.5, // C6
     };
 
-    if (leadNotes[s]) {
-      const lf = leadNotes[s];
-      // 쨍하고 시원한 카툰 리드 사운드
-      this.tone(lf, 0.16, 'square', 0.26, { dest });
-      this.tone(lf * 0.5, 0.16, 'sawtooth', 0.18, { dest });
-      this.tone(lf * 2, 0.12, 'sine', 0.14, { dest, delay: 0.01 });
+    // Second two-bar phrase answers the first instead of replaying the same lead.
+    const answerNotes: Record<number, number> = {
+      0: 783.99,  // G5
+      2: 659.25,  // E5
+      4: 523.25,  // C5
+      6: 587.33,  // D5
+      8: 783.99,  // G5
+      10: 880.0,  // A5
+      12: 783.99, // G5
+      14: 659.25, // E5
+      16: 880.0,  // A5
+      18: 1046.5, // C6
+      20: 880.0,  // A5
+      22: 783.99, // G5
+      24: 698.46, // F5
+      26: 880.0,  // A5
+      28: 783.99, // G5
+      30: 1046.5, // C6
+    };
+
+    // Third and fourth phrases revisit the theme with new chord tones and a
+    // brighter resolution, doubling the loop before it returns to the start.
+    const repriseNotes: Record<number, number> = {
+      0: 659.25,  // E5
+      2: 783.99,  // G5
+      4: 1046.5,  // C6
+      6: 783.99,  // G5
+      8: 783.99,  // G5
+      10: 587.33, // D5
+      12: 493.88, // B4
+      14: 587.33, // D5
+      16: 1046.5, // C6
+      18: 880.0,  // A5
+      20: 659.25, // E5
+      22: 880.0,  // A5
+      24: 698.46, // F5
+      26: 587.33, // D5
+      28: 523.25, // C5
+      30: 698.46, // F5
+    };
+    const closingNotes: Record<number, number> = {
+      0: 523.25,  // C5
+      2: 698.46,  // F5
+      4: 880.0,   // A5
+      6: 1046.5,  // C6
+      8: 587.33,  // D5
+      10: 783.99, // G5
+      12: 987.77, // B5
+      14: 783.99, // G5
+      16: 880.0,  // A5
+      18: 1046.5, // C6
+      20: 1318.5, // E6
+      22: 1046.5, // C6
+      24: 698.46, // F5
+      26: 880.0,  // A5
+      28: 1046.5, // C6
+      30: 1046.5, // C6 resolution
+    };
+
+    const leadMap = phraseIndex === 0
+      ? leadNotes
+      : phraseIndex === 1
+        ? answerNotes
+        : phraseIndex === 2
+          ? repriseNotes
+          : closingNotes;
+    const lead = leadMap[phraseStep];
+    if (lead) {
+      const lf = lead;
+      // Softer triangle lead and restrained harmonics keep the bright melody
+      // clear over the drums without the old square/sawtooth glare.
+      this.tone(lf, 0.17, 'triangle', 0.22, { dest });
+      this.tone(lf * 0.5, 0.16, 'sine', 0.11, { dest });
+      this.tone(lf * 2, 0.12, 'sine', 0.08, { dest, delay: 0.01 });
     }
   }
 }
