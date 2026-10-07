@@ -188,11 +188,11 @@ export class GameEngine {
     container.append(bg2d, this.bg3d, cv, this.scan, this.vignette, this.flashEl, this.popupLayer);
 
     // 따뜻하고 화사한 카툰 햇살 조명
-    this.scene.add(new THREE.HemisphereLight(0xe0f2fe, 0x4ade80, 2.2));
-    const sun = new THREE.DirectionalLight(0xfff5db, 2.8);
+    this.scene.add(new THREE.HemisphereLight(0xe0f2fe, 0x4ade80, 2.3));
+    const sun = new THREE.DirectionalLight(0xfff5db, 2.9);
     sun.position.set(-6, 24, 16);
     this.scene.add(sun);
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.4);
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
     rimLight.position.set(12, 10, -18);
     this.scene.add(rimLight);
 
