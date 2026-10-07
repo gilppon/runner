@@ -99,7 +99,7 @@ function makePalette(t: Theme): Palette {
     floorA: floor.clone(),
     floorB: floor.clone().lerp(WHITE, 0.14),
     // 흙 단면 (따뜻하고 진한 초콜릿 흙색)
-    floorSide: c('#54331a'),
+    floorSide: c('#b46b38'),
     wall: wall.clone(),
     wallEmis: wall.clone().multiplyScalar(0.45),
     panel: wall.clone().lerp(accent2, 0.3),
@@ -200,10 +200,10 @@ export class World {
   // ☀️ 카툰 배경용 머티리얼
   private matSun = new THREE.MeshBasicMaterial({ color: 0xffd166 });
   private matCloud = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, transparent: true, opacity: 0.95 });
-  private matHillFar = new THREE.MeshStandardMaterial({ color: 0x82b88c, roughness: 0.9 });
-  private matHillNear = new THREE.MeshStandardMaterial({ color: 0x4aa55c, roughness: 0.85 });
+  private matHillFar = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.85 });
+  private matHillNear = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.8 });
   private matTrunk = new THREE.MeshStandardMaterial({ color: 0x825432, roughness: 0.8 });
-  private matCanopy = new THREE.MeshStandardMaterial({ color: 0x2e8b44, roughness: 0.6 });
+  private matCanopy = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.55 });
 
   private tiles: THREE.Group[] = [];
   private sun!: THREE.Group;
@@ -403,8 +403,8 @@ export class World {
       [this.tileGeoB, floorB],
     ];
     // 도로 런웨이 전용 따뜻한 황금 흙길 색상
-    const roadColor = new THREE.Color('#e0a96d');
-    const roadColorB = new THREE.Color('#d49b5c');
+    const roadColor = new THREE.Color('#fef08a');
+    const roadColorB = new THREE.Color('#fde047');
 
     for (let pIdx = 0; pIdx < pairs.length; pIdx++) {
       const [geo, grassColor] = pairs[pIdx];
@@ -493,10 +493,9 @@ export class World {
       const isFar = i % 2 === 0;
       const mat = isFar ? this.matHillFar : this.matHillNear;
       const radius = isFar ? this.rnd(16, 26) : this.rnd(9, 16);
-      const height = isFar ? this.rnd(18, 34) : this.rnd(10, 19);
-      const hill = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 18), mat);
-      hill.position.y = height / 2 - 8;
-      hill.scale.set(1.2, 1, 0.75);
+      const hill = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.2, 24, 16), mat);
+      hill.position.y = -radius * 0.45;
+      hill.scale.set(1.6, 0.75, 1.2);
       hg.add(hill);
       hg.position.set(0, 0, isFar ? -this.rnd(55, 80) : -this.rnd(32, 48));
       this.root.add(hg);
@@ -1142,8 +1141,8 @@ export class World {
     swirlHolder.rotation.y = Math.PI / 2;
     swirlHolder.position.set(-0.15, 1.75, 0);
     const swirl = new THREE.Mesh(
-      new THREE.TorusGeometry(1.0, 0.05, 6, 24, Math.PI * 1.5),
-      new THREE.MeshBasicMaterial({ color: '#ffffff' }),
+      new THREE.CylinderGeometry(1.4, 1.4, 0.08, 6, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x06b6d4, side: THREE.DoubleSide, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending }),
     );
     swirlHolder.add(swirl);
     g.add(swirlHolder);

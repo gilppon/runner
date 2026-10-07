@@ -35,7 +35,7 @@ export function Title({
   const nextMs = upcomingMilestone(save);
   return (
     <div className="scroll-thin absolute inset-0 z-10 overflow-y-auto">
-      <div className="flex min-h-full flex-col items-center justify-center px-4 pb-6 pt-16 text-center sm:pt-6">
+      <div className="flex min-h-full flex-col items-center justify-start px-4 pb-4 pt-6 text-center sm:pt-5">
       <div className="absolute right-3 top-3 flex flex-wrap items-center justify-end gap-2 sm:right-5 sm:top-5">
         <button
           onClick={onClaimDaily}
@@ -87,47 +87,33 @@ export function Title({
         DIMENSION SHIFT RUNNER
       </div>
 
-      <p className="mt-3 max-w-xl text-base font-semibold leading-snug text-indigo-50/95 drop-shadow sm:mt-4 sm:text-xl">
-        Run the flat world. Hit a giant wall? Press <Key>SPACE</Key> — the map rotates 90° into a top-down 3D city and you
-        can simply <b className="text-fuchsia-300">walk around it</b>. Something is hiding behind those walls…
+      <p className="mt-2 max-w-lg text-sm font-bold leading-snug text-white/90 drop-shadow sm:mt-3 sm:text-base">
+        Shift between 2D runner & 3D obstacle city! Press <Key>SPACE</Key> to walk around giant walls.
       </p>
 
-      <div className="mt-5 flex flex-col items-center gap-3 sm:mt-7 sm:flex-row">
+      <div className="mt-4 flex flex-col items-center gap-3 sm:mt-6 sm:flex-row">
         <button
           disabled={busy}
           onClick={onPlay}
-          className="btn btn-primary anim-pulse-ring px-10 py-4 text-lg sm:text-xl"
+          className="btn btn-primary anim-pulse-ring px-12 py-4 text-xl sm:text-2xl shadow-2xl"
         >
-          ▶ Run
+          🥕 PLAY RUN!
         </button>
-        <button onClick={onHub} className="btn btn-ghost px-6 py-4 text-sm sm:text-base">
-          🗼 Hub · Upgrades · Pets · Tower
+        <button onClick={onHub} className="btn btn-ghost px-6 py-3.5 text-sm sm:text-base">
+          🏠 Carrot Village · Pets & Upgrades
         </button>
       </div>
 
-      <div className="mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-3">
-        {[
-          {
-            t: '2D SIDE-SCROLL',
-            c: 'text-cyan-200',
-            d: 'Jump pits, spikes and spike balls with ▲ / W. Everything here is flat — depth is a lie.',
-          },
-          {
-            t: '3D TOP-DOWN',
-            c: 'text-fuchsia-300',
-            d: 'Steer with ▲ ▼ to slip around giant walls. No jumping — and your energy drains.',
-          },
-          {
-            t: 'ORBS & GATES',
-            c: 'text-amber-200',
-            d: 'Orbs refill your Dimension Energy. A light beam behind a wall marks a hidden Dimension Gate.',
-          },
-        ].map((c) => (
-          <div key={c.t} className="glass rounded-xl p-3 text-left">
-            <div className={`font-display text-[0.7rem] font-black tracking-[0.2em] ${c.c}`}>{c.t}</div>
-            <div className="mt-1 text-sm leading-snug text-white/85">{c.d}</div>
-          </div>
-        ))}
+      <div className="mt-4 flex flex-wrap justify-center gap-2 max-w-2xl sm:mt-5">
+        <div className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-cyan-200">
+          <span>🌀</span> 2D: Jump & Slide (<Key>▲</Key> / <Key>▼</Key>)
+        </div>
+        <div className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-fuchsia-200">
+          <span>🎮</span> 3D: Steer (<Key>▲</Key> <Key>▼</Key>) around walls
+        </div>
+        <div className="glass flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-amber-200">
+          <span>🥕</span> Orbs & Gates: Refill energy & leap stages
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs font-bold tracking-[0.2em] text-white/70 sm:mt-6">

@@ -48,11 +48,11 @@ body {
   pointer-events: none;
 }
 .dim-bg-2d {
-  background: linear-gradient(to bottom, var(--sky1, #4aa8ff) 0%, var(--sky2, #d8f3ff) 100%);
+  background: linear-gradient(180deg, var(--sky1, #38bdf8) 0%, #bae6fd 60%, var(--sky2, #f0f9ff) 100%);
 }
 .dim-bg-3d {
   opacity: 0;
-  background: linear-gradient(to bottom, var(--void1, #2b6cb0) 0%, var(--void2, #90cdf4) 100%);
+  background: linear-gradient(180deg, var(--void1, #1e40af) 0%, #3b82f6 50%, var(--void2, #93c5fd) 100%);
 }
 .dim-scan {
   display: none !important;

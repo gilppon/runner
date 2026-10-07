@@ -85,8 +85,8 @@ export class CameraRig {
     const fov = Math.max(3, CAM.FOV2 * Math.pow(CAM.FOV3 / CAM.FOV2, e) + this.fovKick);
     const D = h / (2 * Math.tan((fov * Math.PI) / 360));
 
-    const tx = fx + 0.22 * h * this.aspect;
-    const ty = lerp(0.2 * h2, 0.4, e);
+    const tx = fx + 0.16 * h * this.aspect;
+    const ty = lerp(0.12 * h2, 0.4, e);
     this.zFollow = damp(this.zFollow, fz * 0.25, 6, dt);
     const tz = this.zFollow * e;
     this.focusX = tx;
