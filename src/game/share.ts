@@ -10,8 +10,7 @@ export interface RunnerChallenge {
 
 export function readRunnerChallenge(): RunnerChallenge | null {
   const params = new URLSearchParams(window.location.search);
-  const sdk = window.PokiSDK as unknown as { getURLParam?: (key: string) => string | null } | undefined;
-  const get = (key: string) => sdk?.getURLParam?.(key) || params.get(key) || params.get(`gd${key}`);
+  const get = (key: string) => params.get(key) || params.get(`gd${key}`);
   if (get('type') !== 'runner_challenge') return null;
   const number = (key: string) => {
     const value = Number(get(key));
@@ -31,13 +30,6 @@ export async function createRunnerShareUrl(result: RunResult): Promise<string> {
     carrots: String(result.orbs),
     gates: String(result.gates),
   };
-  try {
-    const sdk = window.PokiSDK as unknown as { shareableURL?: (values: Record<string, string>) => Promise<string> } | undefined;
-    const url = await sdk?.shareableURL?.(params);
-    if (url) return url;
-  } catch {
-    // Fall back to a regular game URL outside Poki.
-  }
   const url = new URL(window.location.href);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   return url.toString();

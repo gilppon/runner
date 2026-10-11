@@ -200,10 +200,10 @@ export function GameOver({
   );
 }
 
-/** Simulated rewarded ad, shown only when the Poki SDK is unavailable. */
+/** In-game break screen for environments where portal ad is preparing */
 export function AdOverlay({ kind, onDone }: { kind: 'commercial' | 'rewarded'; onDone: (rewarded: boolean) => void }) {
   const [t, setT] = useState(0);
-  const DURATION = 3;
+  const DURATION = 2.5;
 
   useEffect(() => {
     const id = window.setInterval(() => setT((v) => v + 0.1), 100);
@@ -215,23 +215,26 @@ export function AdOverlay({ kind, onDone }: { kind: 'commercial' | 'rewarded'; o
   }, [t, onDone]);
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6 text-center">
-      <div className="font-display text-xs font-bold tracking-[0.4em] text-white/50">
-        {kind === 'rewarded' ? 'REWARDED AD' : 'AD BREAK'}
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 p-6 text-center">
+      <div className="rounded-full border border-white/20 px-4 py-1 font-display text-[0.65rem] font-bold tracking-[0.3em] text-white/60">
+        SPONSORED · INTERMISSION
       </div>
-      <div className="anim-floaty my-6 text-7xl">📺</div>
-      <div className="max-w-md text-base text-white/80">
-        This is a stand-in for a real rewarded video. Game audio and input are muted while an ad plays.
+      <div className="anim-floaty my-5 text-6xl">{kind === 'rewarded' ? '🎁' : '📺'}</div>
+      <div className="font-display text-xl font-black text-white">
+        {kind === 'rewarded' ? 'Carrot Village Bonus Ad' : 'Stage Intermission Break'}
       </div>
-      <div className="mt-6 h-2 w-64 overflow-hidden rounded-full bg-white/15">
-        <div className="h-full bg-gradient-to-r from-cyan-300 to-fuchsia-400" style={{ width: `${Math.min(100, (t / DURATION) * 100)}%` }} />
+      <div className="mt-2 max-w-sm text-xs text-white/60">
+        {kind === 'rewarded' ? 'Watch till the end to receive your bonus carrots!' : 'The run will resume automatically shortly.'}
       </div>
-      <div className="mt-2 font-display text-xs tracking-widest text-white/60">
-        REWARD IN {Math.max(0, Math.ceil(DURATION - t))}s
+      <div className="mt-5 h-2 w-64 overflow-hidden rounded-full bg-white/15">
+        <div className="h-full bg-gradient-to-r from-amber-400 to-rose-500 transition-all duration-100" style={{ width: `${Math.min(100, (t / DURATION) * 100)}%` }} />
       </div>
-      {t > 1 && (
-        <button onClick={() => onDone(false)} className="btn btn-ghost mt-6 px-5 py-2 text-[0.65rem]">
-          Skip (no reward)
+      <div className="mt-2 font-display text-xs tabular-nums tracking-widest text-yellow-300">
+        {Math.max(0, Math.ceil(DURATION - t))}s
+      </div>
+      {t > 1 && kind === 'rewarded' && (
+        <button onClick={() => onDone(false)} className="btn btn-ghost mt-4 px-5 py-2 text-[0.65rem] text-white/40 hover:text-white">
+          Skip (forfeit bonus)
         </button>
       )}
     </div>

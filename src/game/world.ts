@@ -213,6 +213,8 @@ export class World {
   private hills: { obj: THREE.Group; base: number }[] = [];
   private trees: { obj: THREE.Group; base: number }[] = [];
   private toyBuildings: { obj: THREE.Group; base: number }[] = [];
+  private warpRings: { mesh: THREE.Mesh; rotSpeed: number; pulseSpeed: number; baseScale: number }[] = [];
+  private starField!: THREE.Points;
   private orbFree: Orb[] = [];
 
   // palette state
@@ -558,7 +560,8 @@ export class World {
       foliage3.position.set(-0.4, 3.3, -0.2);
       tg.add(foliage1, foliage2, foliage3);
 
-      const zSide = (this.random() < 0.5 ? -1 : 1) * this.rnd(10, 24);
+      // 트랙 뒤쪽(음수 Z)에 배치하여 플레이어 토끼를 절대 가리지 않는 아름다운 배경 나무
+      const zSide = -this.rnd(8, 22);
       tg.position.set(0, 0, zSide);
       const sc = this.rnd(0.85, 1.35);
       tg.scale.set(sc, sc, sc);
@@ -621,6 +624,50 @@ export class World {
       this.root.add(tg);
       this.toyBuildings.push({ obj: tg, base: (i / TOY_CITY_N) * TOY_CITY_SPAN });
     }
+
+    // 6. 🌀 거대한 회전하는 차원 관문 링들 (Colossal Warp Rings)
+    const ringGeo = new THREE.TorusGeometry(14, 0.65, 16, 48);
+    const ringColors = [0x38bdf8, 0xec4899, 0xfacc15];
+    for (let i = 0; i < 3; i++) {
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: ringColors[i],
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.position.set((i - 1) * 35, 26 + i * 4, -85 - i * 15);
+      ringMesh.rotation.x = Math.PI * 0.15;
+      ringMesh.rotation.y = (i * Math.PI) / 3;
+      this.root.add(ringMesh);
+      this.warpRings.push({
+        mesh: ringMesh,
+        rotSpeed: 0.18 + i * 0.08,
+        pulseSpeed: 1.5 + i * 0.4,
+        baseScale: 1 + i * 0.25,
+      });
+    }
+
+    // 7. ✨ 반짝이는 차원 성운 별무리 (Star / Sparkle Field)
+    const starCount = 140;
+    const starPos = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      starPos[i * 3] = (this.random() - 0.5) * 320;
+      starPos[i * 3 + 1] = 8 + this.random() * 55;
+      starPos[i * 3 + 2] = -50 - this.random() * 85;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 2.2,
+      transparent: true,
+      opacity: 0.88,
+      blending: THREE.AdditiveBlending,
+    });
+    this.starField = new THREE.Points(starGeo, starMat);
+    this.root.add(this.starField);
   }
 
   // ---- queries -------------------------------------------------------------
@@ -738,6 +785,18 @@ export class World {
     }
     for (const b of this.toyBuildings) {
       b.obj.position.x = camX + mod(b.base - camX * 0.58, TOY_CITY_SPAN) - TOY_CITY_SPAN / 2;
+    }
+
+    // 🌀 차원 관문 링 & 성운 별무리 회전/패럴랙스
+    for (let i = 0; i < this.warpRings.length; i++) {
+      const r = this.warpRings[i];
+      r.mesh.rotation.z += dt * r.rotSpeed;
+      r.mesh.position.x = camX * 0.92 + (i - 1) * 38;
+      const s = r.baseScale * (1 + Math.sin(t * r.pulseSpeed) * 0.04);
+      r.mesh.scale.set(s, s, s);
+    }
+    if (this.starField) {
+      this.starField.position.x = camX * 0.96;
     }
 
     // pruning

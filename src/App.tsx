@@ -10,7 +10,7 @@ import {
 } from './game/save';
 import type { SaveData } from './game/save';
 import { audio } from './game/audio';
-import { poki } from './game/poki';
+import { portalAd } from './game/portalAd';
 import { petById } from './game/content';
 import { readRunnerChallenge } from './game/share';
 import type { EngineEvent, HudState, RunResult, ToastTone } from './game/types';
@@ -57,6 +57,7 @@ export default function App() {
   const [ad, setAd] = useState<PendingAd | null>(null);
   const [muted, setMuted] = useState(save.muted);
   const toastId = useRef(0);
+  const sessionRuns = useRef(0);
 
   const update = useCallback((fn: (s: SaveData) => SaveData) => {
     setSave((prev) => {
@@ -76,7 +77,7 @@ export default function App() {
 
   const handleGameOver = useCallback(
     (r: RunResult) => {
-      poki.gameplayStop(); // Poki: gameplayStop on death
+      portalAd.gameplayStop();
       setNewBest(r.score > saveRef.current.best);
       setResult(r);
       setDoubled(false);
@@ -112,7 +113,7 @@ export default function App() {
           update((s) => ({ ...s, hints: { ...s.hints, [e.key]: (s.hints[e.key] ?? 0) + 1 } }));
           break;
         case 'pause':
-          poki.gameplayStop();
+          portalAd.gameplayStop();
           setScreen('paused');
           break;
         case 'error':
@@ -148,15 +149,15 @@ export default function App() {
   }, [supported]);
 
   useEffect(() => {
-    poki.registerMockAd((kind) => new Promise<boolean>((resolve) => setAd({ kind, resolve })));
-    void poki.init().then(() => {
+    portalAd.registerMockAd((kind) => new Promise<boolean>((resolve) => setAd({ kind, resolve })));
+    void portalAd.init().then(() => {
       if (!loadingFinishedSent) {
         loadingFinishedSent = true;
-        poki.gameLoadingFinished(); // Poki: loading complete
+        portalAd.gameLoadingFinished();
       }
     });
     return () => {
-      poki.registerMockAd(null);
+      portalAd.registerMockAd(null);
     };
   }, []);
 
@@ -202,11 +203,14 @@ export default function App() {
     audio.ui();
     (document.activeElement as HTMLElement | null)?.blur?.();
     try {
-      await poki.commercialBreak(); // Poki: natural break before gameplay
+      sessionRuns.current += 1;
+      if (sessionRuns.current > 1) {
+        await portalAd.commercialBreak();
+      }
       engineRef.current?.startRun({ ...buildRunConfig(saveRef.current), routeSeed: challenge?.seed });
       setResult(null);
       setScreen('playing');
-      poki.gameplayStart(); // Poki: gameplayStart
+      portalAd.gameplayStart();
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -217,11 +221,11 @@ export default function App() {
   const resume = useCallback(() => {
     engineRef.current?.resume();
     setScreen('playing');
-    poki.gameplayStart();
+    portalAd.gameplayStart();
   }, []);
 
   const quitToMenu = useCallback(() => {
-    poki.gameplayStop();
+    portalAd.gameplayStop();
     engineRef.current?.toMenu();
     setScreen('title');
   }, []);
@@ -238,7 +242,7 @@ export default function App() {
     busyRef.current = true;
     setBusy(true);
     try {
-      const ok = await poki.rewardedBreak(); // Poki: rewardedBreak on player's choice
+      const ok = await portalAd.rewardedBreak();
       if (ok) {
         const r = result;
         // the run continues, so take back what was credited at game over
@@ -252,7 +256,7 @@ export default function App() {
         setResult(null);
         engineRef.current?.revive();
         setScreen('playing');
-        poki.gameplayStart();
+        portalAd.gameplayStart();
       }
     } finally {
       busyRef.current = false;
@@ -265,7 +269,7 @@ export default function App() {
     busyRef.current = true;
     setBusy(true);
     try {
-      const ok = await poki.rewardedBreak();
+      const ok = await portalAd.rewardedBreak();
       if (ok) {
         update((s) => ({ ...s, shards: s.shards + result.shards }));
         setDoubled(true);

@@ -39,6 +39,8 @@ export class CameraRig {
   private shakeAmt = 0;
   private fovKick = 0;
   private zFollow = 0;
+  private smoothX = 0;
+  private initialized = false;
 
   get transitioning() {
     return this.p !== this.target;
@@ -85,17 +87,25 @@ export class CameraRig {
     const fov = Math.max(3, CAM.FOV2 * Math.pow(CAM.FOV3 / CAM.FOV2, e) + this.fovKick);
     const D = h / (2 * Math.tan((fov * Math.PI) / 360));
 
-    const tx = fx + 0.16 * h * this.aspect;
+    const rawTargetX = fx + 0.16 * h * this.aspect;
+    if (!this.initialized) {
+      this.smoothX = rawTargetX;
+      this.initialized = true;
+    } else {
+      // 프레임 델타 지터를 흡수하는 버터처럼 부드러운 스무스 팔로우 (Smooth Damping)
+      this.smoothX = damp(this.smoothX, rawTargetX, 24, dt);
+    }
+    const tx = this.smoothX;
     const ty = lerp(0.12 * h2, 0.4, e);
     this.zFollow = damp(this.zFollow, fz * 0.25, 6, dt);
     const tz = this.zFollow * e;
     this.focusX = tx;
 
-    // camera shake in screen space
-    this.shakeAmt = damp(this.shakeAmt, 0, 6, dt);
-    if (this.shakeAmt < 0.002) this.shakeAmt = 0;
-    const ox = (Math.random() - 0.5) * 2 * this.shakeAmt;
-    const oy = (Math.random() - 0.5) * 2 * this.shakeAmt;
+    // 카메라 셰이크: 잔여 떨림 완전 차단 (빠른 감쇄 + 엄격한 데드존)
+    this.shakeAmt = damp(this.shakeAmt, 0, 14, dt);
+    if (this.shakeAmt < 0.005) this.shakeAmt = 0;
+    const ox = this.shakeAmt > 0 ? (Math.random() - 0.5) * 2 * this.shakeAmt : 0;
+    const oy = this.shakeAmt > 0 ? (Math.random() - 0.5) * 2 * this.shakeAmt : 0;
 
     if (this.p === 0 && Math.abs(this.fovKick) < 0.05) {
       const o = this.ortho;

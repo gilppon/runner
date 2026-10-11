@@ -180,6 +180,10 @@ export class GameEngine {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
+    // 🌟 High-End 3D Cinema Color Pipeline (화사하고 쨍한 색감)
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
     const cv = renderer.domElement;
     cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;';
     this.renderer = renderer;
@@ -187,22 +191,30 @@ export class GameEngine {
     const bg2d = layer('dim-bg-2d');
     container.append(bg2d, this.bg3d, cv, this.scan, this.vignette, this.flashEl, this.popupLayer);
 
-    // 따뜻하고 화사한 카툰 햇살 조명
-    this.scene.add(new THREE.HemisphereLight(0xe0f2fe, 0x4ade80, 2.3));
-    const sun = new THREE.DirectionalLight(0xfff5db, 2.9);
-    sun.position.set(-6, 24, 16);
+    // ☀️ 따뜻하고 찬란한 3D 카툰 조명 시스템
+    this.scene.add(new THREE.HemisphereLight(0xbae6fd, 0x86efac, 2.5));
+    const sun = new THREE.DirectionalLight(0xfffae8, 3.4);
+    sun.position.set(-8, 28, 20);
     this.scene.add(sun);
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
-    rimLight.position.set(12, 10, -18);
+
+    // 반대편 입체감을 살리는 소프트 필 라이트
+    const fillLight = new THREE.DirectionalLight(0xe0e7ff, 1.2);
+    fillLight.position.set(10, -8, -12);
+    this.scene.add(fillLight);
+
+    // 캐릭터 실루엣을 3D로 깎아주는 네온 아쿠아 림 라이트 (Rim Light)
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 2.2);
+    rimLight.position.set(14, 16, -22);
     this.scene.add(rimLight);
 
     this.scene.add(this.world.root);
     this.particles = new Particles(this.scene);
     this.scene.add(this.player.group);
 
+    // 부드러운 소프트 컨택트 섀도우
     this.shadow = new THREE.Mesh(
-      new THREE.CircleGeometry(0.55, 20),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
+      new THREE.CircleGeometry(0.62, 24),
+      new THREE.MeshBasicMaterial({ color: 0x050c18, transparent: true, opacity: 0.42, depthWrite: false }),
     );
     this.shadow.rotation.x = -Math.PI / 2;
     this.scene.add(this.shadow);
@@ -498,11 +510,12 @@ export class GameEngine {
     this.rig.setTarget(is3D);
     audio.shift(is3D);
     audio.setDimension(is3D);
-    this.rig.shake(0.3);
-    this.rig.kickFov(is3D ? 10 : 5);
+    this.rig.shake(0.55);
+    this.rig.kickFov(is3D ? 16 : 9);
     const pal = this.world.cur;
-    this.particles.burst(this.p.x, this.p.y + 0.9, this.rz(), is3D ? pal.accent2 : pal.accent, 34, 8, 0.7, 2);
-    this.flash(is3D ? `#${pal.accent2.getHexString()}` : `#${pal.accent.getHexString()}`, 0.28, 0.55);
+    this.particles.burst(this.p.x, this.p.y + 0.9, this.rz(), is3D ? pal.accent2 : pal.accent, 55, 11, 0.85, 3);
+    this.flash(is3D ? `#${pal.accent2.getHexString()}` : `#${pal.accent.getHexString()}`, 0.38, 0.65);
+    this.showComboPopup(is3D ? '⚡ 3D SHIFT!' : '🌀 2D FLATTEN!', this.p.x, this.p.y + 1.8);
     if (!is3D) this.p.vz = 0;
     if (was === '3D_TopDown' && !is3D) {
       // forgive obstacles the player is already overlapping in X at the moment of flattening
@@ -730,7 +743,7 @@ export class GameEngine {
         if (this.comboCount >= 2) {
           const bonus = (this.comboCount - 1) * 10;
           run.comboBonus += bonus;
-          this.showComboPopup(`CARROT CHAIN x${this.comboCount} · +${bonus} BONUS 🥕`, o.x, o.y);
+          this.showComboPopup(`+${bonus} 🥕 (x${this.comboCount})`, o.x, o.y + 0.6);
         }
 
         audio.orb();
@@ -792,18 +805,27 @@ export class GameEngine {
     }
     this.duckPrev = this.duck;
 
-    // vertical physics + support
+    // vertical physics + support (지면 칼고정으로 수직 떨림 완전 박멸)
     const prevY = p.y;
-    p.vy = Math.max(-45, p.vy - GRAVITY * dt);
-    p.y += p.vy * dt;
     const floor = this.supportY(prevY);
     this.floorY = floor;
-    if (floor > -Infinity && p.y <= floor) {
+
+    if (p.grounded && p.vy <= 0 && floor > -Infinity) {
+      // 이미 지면에 착지해 달리는 중: 프레임 틱 중력 떨림 없이 지면에 칼밀착 활주
       p.y = floor;
-      if (p.vy < 0) p.vy = 0;
+      p.vy = 0;
       p.grounded = true;
     } else {
-      p.grounded = false;
+      // 공중 체공 또는 점프/낙하 중
+      p.vy = Math.max(-45, p.vy - GRAVITY * dt);
+      p.y += p.vy * dt;
+      if (floor > -Infinity && p.y <= floor) {
+        p.y = floor;
+        if (p.vy < 0) p.vy = 0;
+        p.grounded = true;
+      } else {
+        p.grounded = false;
+      }
     }
 
     // collisions
@@ -1043,7 +1065,7 @@ export class GameEngine {
     const p = this.p;
     const pr = this.player;
     const pal = this.world.cur;
-    const flat = lerp(0.35, 1, e);
+    const flat = lerp(0.85, 1, e);
     const dead = this.state === 'dead';
 
     const rz = lerp(5.6, p.z, e);
@@ -1176,7 +1198,7 @@ export class GameEngine {
 
   private showComboPopup(msg: string, wx: number, wy: number) {
     if (!this.popupLayer) return;
-    const v = new THREE.Vector3(wx, wy + 0.6, this.rz());
+    const v = new THREE.Vector3(wx, wy + 1.1, this.rz());
     v.project(this.rig.active);
     const sx = Math.max(10, Math.min(90, (v.x * 0.5 + 0.5) * 100));
     const sy = Math.max(10, Math.min(90, (-v.y * 0.5 + 0.5) * 100));
