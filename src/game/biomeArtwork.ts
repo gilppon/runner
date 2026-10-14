@@ -1,0 +1,68 @@
+const SCENES: Record<string, string[]> = {
+  'CARROT MEADOW': [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">',
+    '<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#78c8e5"/><stop offset=".62" stop-color="#c3e7df"/><stop offset="1" stop-color="#f8d8a2"/></linearGradient><linearGradient id="field" x2="0" y2="1"><stop stop-color="#8fbd77"/><stop offset="1" stop-color="#527c54"/></linearGradient><pattern id="rows" width="76" height="34" patternUnits="userSpaceOnUse"><path d="M0 6 Q38 -2 76 6 M0 22 Q38 14 76 22" fill="none" stroke="#d8bd83" stroke-width="3" opacity=".58"/></pattern></defs>',
+    '<rect width="1600" height="900" fill="url(#sky)"/><circle cx="1080" cy="154" r="78" fill="#ffe5a0" opacity=".88"/><circle cx="1080" cy="154" r="112" fill="#ffe5a0" opacity=".16"/>',
+    '<g fill="#fff8e9" opacity=".7"><path d="M180 188c18-42 74-46 99-10 38-29 89-2 84 38H162c-19-14-8-31 18-28z"/><path d="M830 238c17-33 58-38 81-9 27-24 69-5 69 25H811c-13-9-1-17 19-16z"/></g>',
+    '<path d="M0 492 Q170 420 345 478 T690 466 T1030 485 T1370 430 T1600 465 V900 H0Z" fill="#b7d6aa"/><path d="M0 568 Q205 492 412 556 T820 520 T1200 554 T1600 506 V900 H0Z" fill="#82b989" opacity=".92"/>',
+    '<g opacity=".72" fill="#587f68"><path d="M0 584Q120 520 244 582v130H0z"/><path d="M1345 558q120-73 255 0v160h-255z"/></g>',
+    '<g transform="translate(560 404)"><path d="M-11 58h22l16 190h-54z" fill="#ead8b4"/><path d="M0 54 0-77M0 54 86 2M0 54 0 151M0 54-86 2" stroke="#fff2d5" stroke-width="13" stroke-linecap="round"/><circle r="19" cy="54" fill="#d58b54"/><path d="M-9-77q9-18 18 0v131h-18z" fill="#f6c98e"/></g>',
+    '<g transform="translate(1010 480)"><path d="M-110 30h220v150h-220z" fill="#e6c99f"/><path d="M-130 32 0-60l130 92z" fill="#bd805e"/><path d="M-79 65h158v115H-79z" fill="#b5d9d1"/><path d="M0 65v115M-79 120H79" stroke="#f4ead7" stroke-width="10"/><path d="M-127 178h254" stroke="#8b6549" stroke-width="11"/></g>',
+    '<path d="M0 627 Q260 560 520 618 T1050 600 T1600 620 V900 H0Z" fill="url(#field)"/><path d="M0 650 Q260 588 520 644 T1050 628 T1600 650 V900 H0Z" fill="url(#rows)" opacity=".7"/>',
+    '<g fill="#f5a849"><path d="M180 640l12 48 13-49zM218 633l10 40 12-41zM1460 636l12 48 13-49zM1498 628l10 40 12-41z"/></g><g fill="#5c9b60"><path d="m186 641-17-18 21 8 4-22 7 23 22-9-18 20zM1466 638l-17-18 21 8 4-22 7 23 22-9-18 20z"/></g>',
+    '<path d="M0 755 Q360 702 710 760 T1420 742 T1600 760 V900 H0Z" fill="#456f4b" opacity=".68"/><g fill="#ffeab4" opacity=".8"><circle cx="90" cy="716" r="4"/><circle cx="510" cy="681" r="5"/><circle cx="1102" cy="708" r="4"/><circle cx="1540" cy="700" r="5"/></g>',
+    '</svg>',
+  ],
+  'COTTON CANDY': [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">',
+    '<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#b58bd5"/><stop offset=".55" stop-color="#f3abc1"/><stop offset="1" stop-color="#ffe4c8"/></linearGradient><linearGradient id="cake" x2="0" y2="1"><stop stop-color="#f6b6c9"/><stop offset="1" stop-color="#cf7eaa"/></linearGradient></defs><rect width="1600" height="900" fill="url(#sky)"/>',
+    '<circle cx="1110" cy="160" r="67" fill="#fff1b5" opacity=".9"/><g fill="#fff4f4" opacity=".68"><path d="M125 208c20-46 73-42 98-11 36-29 88-3 81 38H104c-19-12-8-27 21-27z"/><path d="M790 137c15-36 58-40 82-10 27-23 72-5 69 28H774c-12-9-2-17 16-18z"/></g>',
+    '<path d="M0 485Q160 395 330 478T690 450T1045 485T1395 420T1600 465V900H0Z" fill="#ebd3ea"/><path d="M0 572Q240 492 440 552T835 510T1200 560T1600 500V900H0Z" fill="#dfa9d8"/>',
+    '<g transform="translate(760 460)"><path d="M0 88v240" stroke="#90664f" stroke-width="18"/><circle cy="38" r="118" fill="#f5b6d1"/><circle cx="-62" cy="32" r="72" fill="#ffd8e0"/><circle cx="48" cy="-12" r="85" fill="#fff0d3"/><circle cx="65" cy="72" r="66" fill="#e7a7d0"/><circle cx="-22" cy="-58" r="65" fill="#f3c7ed"/><circle cy="38" r="118" fill="none" stroke="#fff2df" stroke-width="9" opacity=".65"/></g>',
+    '<g transform="translate(1030 466)"><path d="M-100 92V-18a100 100 0 0 1 200 0V92" fill="none" stroke="#fff0ce" stroke-width="24"/><path d="M-67 91V-16a67 67 0 0 1 134 0V91" fill="none" stroke="#f27fae" stroke-width="17"/><path d="M-106 93h212" stroke="#9a648f" stroke-width="15"/></g>',
+    '<g fill="#f8d786"><path d="m808 328 14 30 33 4-24 22 7 33-30-17-29 17 6-33-24-22 34-4z"/><path d="m1485 300 9 19 21 3-15 14 4 20-19-10-18 10 3-20-14-14 20-3z"/></g>',
+    '<path d="M0 638Q250 575 480 629T930 604T1320 645T1600 611V900H0Z" fill="#cf8fc5"/><path d="M0 730Q230 669 540 719T1060 705T1600 727V900H0Z" fill="#bd76af"/>',
+    '<g fill="#f8a9cf"><circle cx="112" cy="664" r="30"/><circle cx="112" cy="635" r="22"/><circle cx="1450" cy="673" r="35"/><circle cx="1450" cy="636" r="24"/></g><g fill="#fff0cf"><circle cx="112" cy="634" r="8"/><circle cx="1450" cy="635" r="9"/></g><path d="M0 814Q360 766 720 818T1440 804T1600 818V900H0Z" fill="#9b5b8e" opacity=".72"/>',
+    '</svg>',
+  ],
+  'BATHROOM ESCAPE': [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">',
+    '<defs><linearGradient id="wall" x2="0" y2="1"><stop stop-color="#b9edf0"/><stop offset="1" stop-color="#70c4d0"/></linearGradient><pattern id="tiles" width="112" height="84" patternUnits="userSpaceOnUse"><rect width="112" height="84" fill="none" stroke="#f3ffff" stroke-width="7" opacity=".7"/><path d="M10 8h92v66H10z" fill="#e9f8f4" opacity=".18"/></pattern><linearGradient id="water" x2="0" y2="1"><stop stop-color="#b8efea"/><stop offset="1" stop-color="#5bb8c2"/></linearGradient></defs>',
+    '<rect width="1600" height="900" fill="url(#wall)"/><rect width="1600" height="700" fill="url(#tiles)"/><path d="M0 674Q210 645 430 678T870 668T1280 676T1600 656V900H0Z" fill="url(#water)"/><path d="M0 719q180-20 350 0t350 0 350 0 350 0 200 0M0 770q180-20 350 0t350 0 350 0 350 0 200 0" fill="none" stroke="#e5fffb" stroke-width="8" opacity=".48"/>',
+    '<g transform="translate(925 178)"><rect width="250" height="304" rx="30" fill="#168aa1" opacity=".23"/><rect x="14" y="14" width="222" height="276" rx="22" fill="#e8fbf8" stroke="#f8ffff" stroke-width="13"/><path d="M30 224Q116 198 220 224v52H30z" fill="#b0e9e5" opacity=".72"/><path d="M59 145h132" stroke="#a8cfcb" stroke-width="4" opacity=".7"/></g>',
+    '<g transform="translate(865 488)"><path d="M-95 0h190l-16 85q-12 31-79 31t-79-31z" fill="#f8ffff" stroke="#7ebbc0" stroke-width="11"/><path d="M-25 116h50v106h-50z" fill="#edf9f4"/><path d="M-58 225h116" stroke="#6b9fa1" stroke-width="14" stroke-linecap="round"/><path d="M-18-5v-53q0-37 41-37h38" fill="none" stroke="#b1d7d4" stroke-width="19" stroke-linecap="round"/><path d="M60-97v26" stroke="#fff" stroke-width="11" stroke-linecap="round"/></g>',
+    '<g transform="translate(358 470)"><rect x="-38" y="-128" width="76" height="182" rx="16" fill="#f9d780"/><rect x="-21" y="-155" width="42" height="36" rx="9" fill="#fff0b9"/><path d="M-38-55h76" stroke="#fff8dc" stroke-width="11"/><path d="M-38 4h76" stroke="#dcaa58" stroke-width="7" opacity=".6"/></g>',
+    '<g fill="#f6ffff" opacity=".78"><circle cx="220" cy="346" r="13"/><circle cx="270" cy="288" r="8"/><circle cx="480" cy="388" r="17"/><circle cx="1450" cy="550" r="11"/><circle cx="1365" cy="590" r="7"/></g><g fill="none" stroke="#e9ffff" stroke-width="5" opacity=".7"><circle cx="220" cy="346" r="23"/><circle cx="480" cy="388" r="29"/><circle cx="1450" cy="550" r="20"/></g>',
+    '<path d="M0 628h1600" stroke="#4c9ca7" stroke-width="12" opacity=".55"/><path d="M0 622Q400 604 800 622T1600 618" fill="none" stroke="#eafff9" stroke-width="8" opacity=".9"/>',
+    '</svg>',
+  ],
+  'SUNNY PARK': [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">',
+    '<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#77c8ed"/><stop offset=".65" stop-color="#c5e6d1"/><stop offset="1" stop-color="#f6d89e"/></linearGradient></defs><rect width="1600" height="900" fill="url(#sky)"/><circle cx="1310" cy="168" r="70" fill="#ffe8a8"/><circle cx="1310" cy="168" r="111" fill="#ffe8a8" opacity=".18"/>',
+    '<g fill="#fffdf2" opacity=".7"><path d="M140 174c16-36 61-38 83-9 31-25 73-4 72 27H126c-13-10-1-18 14-18z"/><path d="M750 256c17-36 61-39 84-9 31-25 74-4 73 28H735c-15-9-2-18 15-19z"/></g>',
+    '<path d="M0 516Q200 422 410 495T830 480T1220 493T1600 449V900H0Z" fill="#b7d7aa"/><path d="M0 594Q250 509 520 574T1030 548T1600 570V900H0Z" fill="#77ae81"/>',
+    '<g fill="#718d91" opacity=".42"><path d="M650 360h62v160h-62zM719 326h76v194h-76zM802 383h57v137h-57zM866 344h85v176h-85z"/><path d="M656 396h15v18h-15zm0 38h15v18h-15zm80-66h17v20h-17zm0 43h17v20h-17zm83-16h14v18h-14zm68-24h16v21h-16z"/></g>',
+    '<g transform="translate(980 500)"><path d="M-116 42 0-42 116 42v12h-232z" fill="#e7b56e"/><path d="M-94 48v111M94 48v111M0 44v115" stroke="#fff1cf" stroke-width="12"/><path d="M-126 160h252" stroke="#c58a50" stroke-width="16" stroke-linecap="round"/><path d="M-137 43 0-60 137 43" fill="none" stroke="#6e9c78" stroke-width="15" stroke-linejoin="round"/></g>',
+    '<g fill="#477b5b"><path d="M148 559v-95q-38-28 0-56-22-33 16-61 40 30 17 61 37 28 0 56v95z"/><path d="M465 564v-75q-36-27-2-51-15-32 19-53 34 23 17 53 34 24 0 51v75z"/><path d="M1500 548v-98q-36-28 1-54-20-31 17-58 38 28 17 58 35 26-1 54v98z"/></g><g fill="#83ad76"><circle cx="164" cy="425" r="62"/><circle cx="482" cy="448" r="54"/><circle cx="1517" cy="420" r="65"/></g>',
+    '<path d="M0 648Q280 598 530 646T1020 630T1600 645V900H0Z" fill="#56885e"/><path d="M0 722Q300 674 610 725T1200 707T1600 725V900H0Z" fill="#3f7557"/>',
+    '<g transform="translate(820 682)"><path d="M-81 0h162v17H-81zm-52 52h266v18h-266z" fill="#dcb976"/><path d="M-65 17v35m130-35v35M-110 70v55m220-55v55" stroke="#e2c087" stroke-width="8"/></g><g fill="#efbc73"><circle cx="245" cy="692" r="11"/><circle cx="312" cy="710" r="9"/><circle cx="1410" cy="694" r="12"/></g><g fill="#fff2c7"><circle cx="245" cy="688" r="4"/><circle cx="312" cy="706" r="4"/><circle cx="1410" cy="690" r="4"/></g>',
+    '</svg>',
+  ],
+  'MOONLIGHT PICNIC': [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">',
+    '<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#202648"/><stop offset=".62" stop-color="#56577e"/><stop offset="1" stop-color="#a27994"/></linearGradient><radialGradient id="glow"><stop stop-color="#ffe9b0" stop-opacity=".45"/><stop offset="1" stop-color="#ffe9b0" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="900" fill="url(#sky)"/>',
+    '<circle cx="1050" cy="188" r="158" fill="url(#glow)"/><path d="M1065 96a91 91 0 1 0 83 145 102 102 0 1 1-83-145z" fill="#fff0c5"/><g fill="#fff4dc" opacity=".82"><circle cx="198" cy="138" r="3"/><circle cx="376" cy="238" r="4"/><circle cx="598" cy="106" r="3"/><circle cx="858" cy="192" r="4"/><circle cx="1025" cy="112" r="3"/><circle cx="1450" cy="305" r="4"/><circle cx="1470" cy="118" r="3"/><circle cx="714" cy="318" r="3"/></g>',
+    '<path d="M0 535Q210 421 430 508T850 471T1240 512T1600 446V900H0Z" fill="#414b69"/><path d="M0 626Q260 523 510 602T1010 562T1600 600V900H0Z" fill="#303e5d"/>',
+    '<g fill="#202e49"><path d="M80 700 157 457l78 243zM196 706 281 424l88 282zM1380 708l82-270 82 270zM1490 710l67-221 68 221zM470 711l70-234 70 234zM1090 714l81-272 83 272z"/></g><g fill="#263653"><path d="M145 682 157 457l12 225zM267 682l14-258 15 258zM1448 682l14-244 14 244zM1129 685l42-243 0 243z"/></g>',
+    '<path d="M0 714Q280 654 530 710T1050 692T1600 716V900H0Z" fill="#28334f"/>',
+    '<g transform="translate(872 680)"><path d="M-125 10h250v16h-250zm-40 62h330v18h-330z" fill="#bf9b78"/><path d="M-103 27v45m206-45v45M-137 90v62m274-62v62" stroke="#b38c6e" stroke-width="10"/><path d="M-88-15h176v25H-88z" fill="#604d66"/><path d="M-72-14v-84M72-14v-84" stroke="#6b5770" stroke-width="8"/></g>',
+    '<g transform="translate(1015 624)"><path d="M-25-15h50v82h-50z" rx="12" fill="#f3ca80"/><path d="M-17-21v-15q0-20 17-20t17 20v15" fill="none" stroke="#e8c27e" stroke-width="9"/><circle cy="25" r="54" fill="#ffcf77" opacity=".13"/></g>',
+    '<path d="M0 800Q300 757 620 801T1210 786T1600 800V900H0Z" fill="#202a43"/><g fill="#c7d1eb" opacity=".7"><circle cx="180" cy="729" r="3"/><circle cx="336" cy="776" r="4"/><circle cx="1420" cy="751" r="3"/></g>',
+    '</svg>',
+  ],
+};
+
+export function biomeArtworkUrl(themeName: string): string {
+  const svg = (SCENES[themeName] ?? SCENES['CARROT MEADOW']).join('');
+  return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+}

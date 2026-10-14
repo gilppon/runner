@@ -87,6 +87,14 @@ export function createPlayer(): PlayerRig {
   const sphereGeo = new THREE.SphereGeometry(1, 32, 24);
   const capsuleGeo = new THREE.CapsuleGeometry(1, 1, 12, 20);
   const cylinderGeo = new THREE.CylinderGeometry(1, 1, 1, 24);
+  const silhouetteMat = new THREE.MeshBasicMaterial({ color: 0x526777, side: THREE.BackSide });
+  const addSilhouette = (mesh: THREE.Mesh, expand: number) => {
+    const shell = new THREE.Mesh(mesh.geometry, silhouetteMat);
+    shell.position.copy(mesh.position);
+    shell.rotation.copy(mesh.rotation);
+    shell.scale.copy(mesh.scale).multiplyScalar(expand);
+    mesh.parent?.add(shell);
+  };
 
   // 상체/전체 피벗 루트 (바운스 애니메이션용)
   const root = new THREE.Group();
@@ -102,6 +110,7 @@ export function createPlayer(): PlayerRig {
   const torso = new THREE.Mesh(sphereGeo, furMat);
   torso.scale.set(0.56, 0.62, 0.52);
   bodyGroup.add(torso);
+  addSilhouette(torso, 1.075);
 
   // 배 뽈록한 하얀 솜털 디테일
   const belly = new THREE.Mesh(sphereGeo, new THREE.MeshStandardMaterial({
@@ -150,6 +159,7 @@ export function createPlayer(): PlayerRig {
   const headMesh = new THREE.Mesh(sphereGeo, furMat);
   headMesh.scale.set(0.58, 0.50, 0.54);
   headGroup.add(headMesh);
+  addSilhouette(headMesh, 1.08);
 
   // 귀여운 하트형 핑크 코
   const nose = new THREE.Mesh(sphereGeo, pinkMat);
@@ -220,6 +230,7 @@ export function createPlayer(): PlayerRig {
     earMesh.scale.set(0.12, 0.42, 0.16);
     earMesh.position.set(0, 0.42, 0);
     earPivot.add(earMesh);
+    addSilhouette(earMesh, 1.1);
 
     // 귀 안쪽 선명한 러블리 핑크 패널
     const innerEar = new THREE.Mesh(capsuleGeo, pinkMat);
@@ -464,4 +475,3 @@ export function createPetMesh(pet: PetDef): THREE.Group {
   add(box, eyeMat, 0.3, 0.08, -0.14, 0.08, 0.12, 0.06);
   return g;
 }
-

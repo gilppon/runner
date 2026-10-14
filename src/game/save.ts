@@ -3,6 +3,8 @@ import type { Perk, UpgradeKey } from './content';
 import type { RunConfig } from './types';
 
 const KEY = 'dimension-shift-runner-save-v1';
+type SaveStorage = Pick<Storage, 'getItem' | 'setItem'>;
+let activeSaveStorage: SaveStorage | null = null;
 
 export interface SaveData {
   shards: number;
@@ -101,9 +103,8 @@ export function upcomingMilestone(s: SaveData): Milestone | null {
 
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 
-export function loadSave(): SaveData {
+function decodeSave(raw: string | null): SaveData {
   try {
-    const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SAVE, hints: {}, claimedMilestones: [] };
     const p = JSON.parse(raw) as Partial<SaveData>;
     // Corruption/NaN guard: every numeric field is clamped before merging
@@ -134,11 +135,46 @@ export function loadSave(): SaveData {
   }
 }
 
+/** Switch to the CrazyGames save API after SDK initialization, migrating existing local progress once. */
+export function connectCrazyDataStorage(storage: SaveStorage): SaveData {
+  try {
+    const remote = storage.getItem(KEY);
+    if (remote !== null) {
+      activeSaveStorage = storage;
+      return decodeSave(remote);
+    }
+
+    const legacy = window.localStorage.getItem(KEY);
+    if (legacy !== null) storage.setItem(KEY, legacy);
+    activeSaveStorage = storage;
+    return decodeSave(legacy);
+  } catch {
+    activeSaveStorage = null;
+    return loadSave();
+  }
+}
+
+export function loadSave(): SaveData {
+  try {
+    const raw = activeSaveStorage ? activeSaveStorage.getItem(KEY) : localStorage.getItem(KEY);
+    return decodeSave(raw);
+  } catch {
+    return { ...DEFAULT_SAVE, hints: {}, claimedMilestones: [] };
+  }
+}
+
 export function writeSave(s: SaveData) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    (activeSaveStorage ?? localStorage).setItem(KEY, JSON.stringify(s));
   } catch {
-    /* storage unavailable (private mode etc.) */
+    if (activeSaveStorage) {
+      activeSaveStorage = null;
+      try {
+        localStorage.setItem(KEY, JSON.stringify(s));
+      } catch {
+        /* local storage unavailable (private mode etc.) */
+      }
+    }
   }
 }
 

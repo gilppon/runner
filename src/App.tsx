@@ -3,6 +3,7 @@ import { GameEngine } from './game/engine';
 import {
   MILESTONES,
   buildRunConfig,
+  connectCrazyDataStorage,
   dailyStatus,
   loadSave,
   milestoneAchieved,
@@ -12,8 +13,8 @@ import type { SaveData } from './game/save';
 import { audio } from './game/audio';
 import { portalAd } from './game/portalAd';
 import { petById } from './game/content';
-import { readRunnerChallenge } from './game/share';
-import type { EngineEvent, HudState, RunResult, ToastTone } from './game/types';
+import { dailyGateTrialSeed, readRunnerChallenge } from './game/share';
+import type { EngineEvent, HudState, RunMode, RunResult, ToastTone } from './game/types';
 import { Hud, Toasts } from './components/Hud';
 import type { ToastItem } from './components/Hud';
 import { Title } from './components/Title';
@@ -28,6 +29,27 @@ interface PendingAd {
 }
 
 let loadingFinishedSent = false;
+const isDevBuild = (import.meta as ImportMeta & { env: { DEV: boolean } }).env.DEV;
+const CRAZY_REWARDED_COOLDOWN_KEY = 'dimension-shift-runner-crazy-rewarded-until';
+const CRAZY_REWARDED_COOLDOWN_MS = 5 * 60 * 1000;
+
+function readCrazyRewardedCooldownUntil() {
+  try {
+    const stored = Number(window.sessionStorage.getItem(CRAZY_REWARDED_COOLDOWN_KEY));
+    return Number.isFinite(stored) ? stored : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeCrazyRewardedCooldownUntil(until: number) {
+  try {
+    if (until > Date.now()) window.sessionStorage.setItem(CRAZY_REWARDED_COOLDOWN_KEY, String(until));
+    else window.sessionStorage.removeItem(CRAZY_REWARDED_COOLDOWN_KEY);
+  } catch {
+    /* A cooldown is helpful but must not block gameplay when storage is unavailable. */
+  }
+}
 
 export default function App() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -54,10 +76,16 @@ export default function App() {
   const [doubled, setDoubled] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const focusPauseRef = useRef(false);
   const [ad, setAd] = useState<PendingAd | null>(null);
   const [muted, setMuted] = useState(save.muted);
+  const [sdkMuted, setSdkMuted] = useState(portalAd.isPlatformMuted);
+  const [crazyAdblockStatus, setCrazyAdblockStatus] = useState(portalAd.crazyAdblockStatus);
+  const [crazyRewardedCooldownUntil, setCrazyRewardedCooldownUntil] = useState(readCrazyRewardedCooldownUntil);
+  const [portalReady, setPortalReady] = useState(false);
+  const [engineReady, setEngineReady] = useState(false);
+  const crazyAutoStarted = useRef(false);
   const toastId = useRef(0);
-  const sessionRuns = useRef(0);
 
   const update = useCallback((fn: (s: SaveData) => SaveData) => {
     setSave((prev) => {
@@ -71,6 +99,13 @@ export default function App() {
     const id = ++toastId.current;
     setToasts((t) => [...t.slice(-2), { id, text, tone }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800);
+  }, []);
+
+  const startCrazyRewardedCooldown = useCallback(() => {
+    if (portalAd.portal !== 'crazy') return;
+    const until = Date.now() + CRAZY_REWARDED_COOLDOWN_MS;
+    writeCrazyRewardedCooldownUntil(until);
+    setCrazyRewardedCooldownUntil(until);
   }, []);
 
   // ------------------------------------------------------------ engine events
@@ -113,7 +148,9 @@ export default function App() {
           update((s) => ({ ...s, hints: { ...s.hints, [e.key]: (s.hints[e.key] ?? 0) + 1 } }));
           break;
         case 'pause':
-          portalAd.gameplayStop();
+          focusPauseRef.current = e.reason === 'focus';
+          // CrazyGames tracks focus loss on its side; Poki still needs explicit lifecycle events.
+          if (!focusPauseRef.current || portalAd.portal === 'poki') portalAd.gameplayStop();
           setScreen('paused');
           break;
         case 'error':
@@ -134,30 +171,86 @@ export default function App() {
   // ------------------------------------------------------------ mount effects
 
   useEffect(() => {
-    if (!supported || !mountRef.current) return;
-    const eng = new GameEngine(
-      mountRef.current,
-      (e) => eventRef.current(e),
-      (h) => setHud(h),
-    );
-    engineRef.current = eng;
-    eng.setPet(saveRef.current.equipped);
+    if (!portalReady) return;
+    let eng: GameEngine | null = null;
+    if (supported) {
+      const mount = mountRef.current;
+      if (!mount) return;
+      eng = new GameEngine(
+        mount,
+        (e) => eventRef.current(e),
+        (h) => setHud(h),
+      );
+      engineRef.current = eng;
+      eng.setPet(saveRef.current.equipped);
+    }
+    if (!loadingFinishedSent) {
+      loadingFinishedSent = true;
+      portalAd.gameLoadingFinished();
+    }
+    setEngineReady(true);
     return () => {
-      eng.dispose();
-      engineRef.current = null;
+      eng?.dispose();
+      if (engineRef.current === eng) engineRef.current = null;
     };
-  }, [supported]);
+  }, [portalReady, supported]);
+
+  useEffect(() => portalAd.onPlatformMuteChange(setSdkMuted), []);
+  useEffect(() => portalAd.onCrazyAdblockStatus(setCrazyAdblockStatus), []);
 
   useEffect(() => {
-    portalAd.registerMockAd((kind) => new Promise<boolean>((resolve) => setAd({ kind, resolve })));
-    void portalAd.init().then(() => {
-      if (!loadingFinishedSent) {
-        loadingFinishedSent = true;
-        portalAd.gameLoadingFinished();
+    if (!portalReady || portalAd.portal !== 'crazy') return;
+    const remaining = crazyRewardedCooldownUntil - Date.now();
+    if (remaining <= 0) {
+      if (crazyRewardedCooldownUntil > 0) {
+        writeCrazyRewardedCooldownUntil(0);
+        setCrazyRewardedCooldownUntil(0);
       }
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      writeCrazyRewardedCooldownUntil(0);
+      setCrazyRewardedCooldownUntil(0);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [portalReady, crazyRewardedCooldownUntil]);
+
+  useEffect(() => {
+    const unlockAudioOnFirstInput = () => {
+      audio.unlock();
+      window.removeEventListener('pointerdown', unlockAudioOnFirstInput, true);
+      window.removeEventListener('keydown', unlockAudioOnFirstInput, true);
+    };
+    window.addEventListener('pointerdown', unlockAudioOnFirstInput, { once: true, passive: true, capture: true });
+    window.addEventListener('keydown', unlockAudioOnFirstInput, { once: true, capture: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudioOnFirstInput, true);
+      window.removeEventListener('keydown', unlockAudioOnFirstInput, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDevBuild) {
+      portalAd.registerMockAd((kind) => new Promise<boolean>((resolve) => setAd({ kind, resolve })));
+    }
+    let active = true;
+    void portalAd.init().then(() => {
+      if (!active) return;
+      if (portalAd.portal === 'crazy') {
+        setCrazyRewardedCooldownUntil(readCrazyRewardedCooldownUntil());
+        const storage = portalAd.getCrazyDataStorage();
+        if (storage) {
+          const restored = connectCrazyDataStorage(storage);
+          saveRef.current = restored;
+          setSave(restored);
+          setMuted(restored.muted);
+        }
+      }
+      setPortalReady(true);
     });
     return () => {
-      portalAd.registerMockAd(null);
+      active = false;
+      if (isDevBuild) portalAd.registerMockAd(null);
     };
   }, []);
 
@@ -167,7 +260,7 @@ export default function App() {
 
   // Screen-based BGM synchronization
   useEffect(() => {
-    if (muted) return;
+    if (muted || sdkMuted) return;
     if (screen === 'title' || screen === 'hub') {
       audio.startLobbyMusic();
     } else if (screen === 'over') {
@@ -176,7 +269,7 @@ export default function App() {
       }, 900);
       return () => window.clearTimeout(t);
     }
-  }, [screen, muted]);
+  }, [screen, muted, sdkMuted]);
 
   // companion follows you in the menu backdrop
   useEffect(() => {
@@ -195,36 +288,61 @@ export default function App() {
     });
   }, [update]);
 
-  const startRun = useCallback(async () => {
-    if (busyRef.current) return;
+  const startRun = useCallback(async (mode: RunMode = 'runner', routeSeed?: number, commercialBreakBeforeStart = false) => {
+    if (!engineRef.current || busyRef.current) return;
+    focusPauseRef.current = false;
+    if (portalAd.portal === 'crazy') crazyAutoStarted.current = true;
     busyRef.current = true;
     setBusy(true);
     audio.unlock();
     audio.ui();
     (document.activeElement as HTMLElement | null)?.blur?.();
     try {
-      sessionRuns.current += 1;
-      if (sessionRuns.current > 1) {
-        await portalAd.commercialBreak();
-      }
-      engineRef.current?.startRun({ ...buildRunConfig(saveRef.current), routeSeed: challenge?.seed });
+      if (commercialBreakBeforeStart && portalAd.isLive) await portalAd.commercialBreak();
+      const selectedSeed = routeSeed ?? (mode === 'gateTrial' ? dailyGateTrialSeed() : challenge?.seed);
+      engineRef.current?.startRun({ ...buildRunConfig(saveRef.current), mode, routeSeed: selectedSeed });
       setResult(null);
       setScreen('playing');
       portalAd.gameplayStart();
+      if (mode === 'gateTrial') {
+        pushToast(
+          selectedSeed === dailyGateTrialSeed()
+            ? 'DAILY GATE TRIAL · enter one gate and reach 250m!'
+            : 'SHARED GATE TRIAL · enter one gate and reach 250m!',
+          'gate',
+        );
+      }
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [challenge]);
+  }, [challenge, pushToast]);
 
-  // Resume must not break run continuity, so no interstitial there (portal review violation)
-  const resume = useCallback(() => {
-    engineRef.current?.resume();
-    setScreen('playing');
-    portalAd.gameplayStart();
+  const resume = useCallback(async () => {
+    if (busyRef.current) return;
+    const afterFocusPause = focusPauseRef.current;
+    focusPauseRef.current = false;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      if (!afterFocusPause) await portalAd.commercialBreak();
+      engineRef.current?.resume();
+      setScreen('playing');
+      if (!afterFocusPause || portalAd.portal === 'poki') portalAd.gameplayStart();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }, []);
 
+  useEffect(() => {
+    if (!portalReady || !engineReady || portalAd.portal !== 'crazy' || crazyAutoStarted.current) return;
+    crazyAutoStarted.current = true;
+    void startRun('runner');
+  }, [portalReady, engineReady, startRun]);
+
   const quitToMenu = useCallback(() => {
+    focusPauseRef.current = false;
     portalAd.gameplayStop();
     engineRef.current?.toMenu();
     setScreen('title');
@@ -259,10 +377,11 @@ export default function App() {
         portalAd.gameplayStart();
       }
     } finally {
+      startCrazyRewardedCooldown();
       busyRef.current = false;
       setBusy(false);
     }
-  }, [result, update]);
+  }, [result, startCrazyRewardedCooldown, update]);
 
   const doubleShards = useCallback(async () => {
     if (!result || doubled || busyRef.current) return;
@@ -276,18 +395,20 @@ export default function App() {
         audio.buy();
       }
     } finally {
+      startCrazyRewardedCooldown();
       busyRef.current = false;
       setBusy(false);
     }
-  }, [result, doubled, update]);
+  }, [result, doubled, startCrazyRewardedCooldown, update]);
 
   // global shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat) return;
+      if (e.repeat || busyRef.current) return;
       if (e.code === 'KeyM') toggleMute();
       const s = screenRef.current;
-      if (e.code === 'Enter' && (s === 'title' || s === 'over')) void startRun();
+      if (e.code === 'Enter' && s === 'title') void startRun('runner');
+      else if (e.code === 'Enter' && s === 'over' && result) void startRun(result.mode, result.routeSeed);
       else if (e.code === 'KeyP' || e.code === 'Escape') {
         e.preventDefault();
         if (s === 'paused') resume();
@@ -296,7 +417,23 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [startRun, resume, toggleMute]);
+  }, [startRun, resume, toggleMute, result]);
+
+  const isCrazyPortal = portalAd.portal === 'crazy';
+  const challengeIsTodayGateTrial =
+    challenge?.mode === 'gateTrial' && (challenge.seed === undefined || challenge.seed === dailyGateTrialSeed());
+  const crazyRewardedCooldownActive = isCrazyPortal && crazyRewardedCooldownUntil > Date.now();
+  const rewardedAdsAvailable =
+    portalReady &&
+    (portalAd.isLive || (isDevBuild && portalAd.status === 'mock')) &&
+    (!isCrazyPortal || (crazyAdblockStatus === 'clear' && !crazyRewardedCooldownActive));
+  const rewardedAdsNotice = isCrazyPortal
+    ? crazyAdblockStatus === 'blocked'
+      ? 'blocked'
+      : crazyAdblockStatus !== 'clear'
+        ? 'unavailable'
+        : null
+    : null;
 
   // ------------------------------------------------------------------ render
 
@@ -315,12 +452,26 @@ export default function App() {
         </div>
       )}
 
+      {(!portalReady || !engineReady) && (
+        <div aria-live="polite" className="absolute inset-0 z-[60] flex items-center justify-center bg-[#07142d]/95 p-6 text-center backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl border border-cyan-300/30 bg-slate-950/70 p-8 shadow-[0_0_48px_rgba(34,211,238,0.18)]">
+            <div className="mx-auto mb-5 h-14 w-14 animate-spin rounded-full border-4 border-cyan-200/20 border-t-fuchsia-300" />
+            <div className="font-display text-lg font-black tracking-[0.18em] text-white">DIMENSION SHIFT</div>
+            <p className="mt-2 text-xs font-bold tracking-widest text-cyan-100/65">CONNECTING TO ARCADE</p>
+          </div>
+        </div>
+      )}
+
       {screen === 'title' && (
         <Title
           save={save}
           busy={busy}
-          muted={muted}
-          onPlay={() => void startRun()}
+          challenge={challenge}
+          challengeIsTodayGateTrial={challengeIsTodayGateTrial}
+          muted={muted || sdkMuted}
+          platformMuted={sdkMuted}
+          onPlay={() => void startRun(challenge?.mode ?? 'runner', challenge?.seed)}
+          onGateTrial={() => void startRun('gateTrial', dailyGateTrialSeed())}
           onHub={openHub}
           onMute={toggleMute}
           onClaimDaily={() =>
@@ -341,21 +492,6 @@ export default function App() {
           }
         />
       )}
-      {screen === 'title' && challenge && (
-        <div className="fixed left-1/2 top-3 z-40 w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border-2 border-amber-300 bg-stone-950/95 p-3 text-center text-amber-100 shadow-xl">
-          <div className="text-xs font-black tracking-widest text-amber-300">FRIEND’S CARROT RUN</div>
-          <div className="mt-1 text-sm font-bold">
-            {challenge.score.toLocaleString('en-US')} points · {challenge.distance}m · 🥕 {challenge.orbs} · 🌀 {challenge.gates}
-          </div>
-          <p className="mt-1 text-[11px] text-amber-100/70">
-            {challenge.seed === undefined ? 'Score target only · this older link has no saved course.' : 'Same course and score target. Can you beat it?'}
-          </p>
-          <button onClick={() => void startRun()} disabled={busy} className="mt-2 rounded-full bg-amber-300 px-4 py-1.5 text-xs font-black text-stone-950 disabled:opacity-50">
-            Race this score
-          </button>
-        </div>
-      )}
-
       {screen === 'hub' && (
         <Hub
           save={save}
@@ -370,7 +506,8 @@ export default function App() {
       {(screen === 'playing' || screen === 'paused') && hud && (
         <Hud
           hud={hud}
-          muted={muted}
+          muted={muted || sdkMuted}
+          platformMuted={sdkMuted}
           onPause={() => engineRef.current?.pause()}
           onMute={toggleMute}
           engineRef={engineRef}
@@ -379,7 +516,7 @@ export default function App() {
 
       <Toasts toasts={toasts} />
 
-      {screen === 'paused' && <PauseMenu onResume={resume} onQuit={quitToMenu} />}
+      {screen === 'paused' && <PauseMenu busy={busy} onResume={() => void resume()} onQuit={quitToMenu} />}
 
       {screen === 'over' && result && (
         <GameOver
@@ -388,7 +525,11 @@ export default function App() {
           newBest={newBest}
           doubled={doubled}
           busy={busy}
-          onAgain={() => void startRun()}
+          adsAvailable={rewardedAdsAvailable}
+          rewardedAdsNotice={rewardedAdsNotice}
+          rewardedCooldownActive={crazyRewardedCooldownActive}
+          challenge={challenge}
+          onAgain={() => void startRun(result.mode, result.routeSeed, true)}
           onHub={openHub}
           onRevive={() => void revive()}
           onDouble={() => void doubleShards()}

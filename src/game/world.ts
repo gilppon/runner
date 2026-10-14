@@ -17,17 +17,30 @@ const FLOOR_HALF = 6;
 const FLOOR_MIN = -24;
 const POOL = 72;
 const PLAYER_H_REF = 1.7; // standing player height (0.45x while ducking)
-const HILL_N = 18;
+const HILL_N = 12;
 const HILL_SPAN = 260;
-const CLOUD_N = 14;
+const CLOUD_N = 10;
 const CLOUD_SPAN = 280;
-const TREE_N = 24;
+const TREE_N = 10;
 const TREE_SPAN = 220;
-const TOY_CITY_N = 18;
+const TOY_CITY_N = 6;
 const TOY_CITY_SPAN = 260;
+const BATHROOM_PROP_N = 8;
+const BATHROOM_PROP_SPAN = 84;
+const BIOME_PROP_SPAN = 84;
+const TOY_COLORS = [0x62bdd0, 0xe9a46d, 0xd98ab0, 0xd9bb6b, 0x7dbd97, 0xa693c7];
 
 export type ObstacleKind = 'wall' | 'cap' | 'panel' | 'block' | 'spike' | 'platform' | 'roller' | 'beam';
 type PatternName = 'pit' | 'wallGap' | 'hurdles' | 'spikes' | 'slalom' | 'rollers' | 'hop' | 'vault' | 'lowBeams';
+
+// Biome flavor comes from existing patterns; global unlock distances stay unchanged.
+const THEME_PATTERN_BIAS: Record<string, Partial<Record<PatternName, number>>> = {
+  'CARROT MEADOW': { pit: 1.1, wallGap: 1.1 },
+  'COTTON CANDY': { hop: 1.65, spikes: 1.25 },
+  'BATHROOM ESCAPE': { rollers: 1.6, lowBeams: 1.45 },
+  'SUNNY PARK': { slalom: 1.55, hurdles: 1.25 },
+  'MOONLIGHT PICNIC': { lowBeams: 1.4, rollers: 1.3, spikes: 1.15 },
+};
 
 export interface Obstacle {
   id: number;
@@ -70,6 +83,12 @@ export interface Portal {
   beamMat: THREE.MeshBasicMaterial;
 }
 
+interface BiomeProp {
+  obj: THREE.Group;
+  base: number;
+  theme: string;
+}
+
 export interface HintMark {
   x: number;
   until: number;
@@ -82,7 +101,7 @@ export interface HintMark {
 // ---- palette ---------------------------------------------------------------
 
 const KEYS = [
-  'floorA', 'floorB', 'floorSide', 'wall', 'wallEmis', 'panel', 'block', 'spike', 'platform',
+  'floorA', 'floorB', 'floorSide', 'roadA', 'roadB', 'wall', 'wallEmis', 'panel', 'block', 'spike', 'platform',
   'accent', 'accent2', 'orb', 'building', 'grid', 'cube', 'sky1', 'sky2', 'void1', 'void2',
 ] as const;
 type PKey = (typeof KEYS)[number];
@@ -100,8 +119,9 @@ function makePalette(t: Theme): Palette {
   return {
     floorA: floor.clone(),
     floorB: floor.clone().lerp(WHITE, 0.14),
-    // 흙 단면 (따뜻하고 진한 초콜릿 흙색)
-    floorSide: c('#b46b38'),
+    floorSide: c(t.side),
+    roadA: c(t.road),
+    roadB: c(t.road).multiplyScalar(0.91),
     wall: wall.clone(),
     wallEmis: wall.clone().multiplyScalar(0.45),
     panel: wall.clone().lerp(accent2, 0.3),
@@ -146,15 +166,15 @@ export class World {
   // shared geometry
   private boxGeo = new THREE.BoxGeometry(1, 1, 1);
   private edgeGeo = new THREE.EdgesGeometry(this.boxGeo);
+  private blockStudGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.16, 12);
+  private rollerCoreGeo = new THREE.SphereGeometry(0.34, 16, 12);
+  private rollerSpikeGeo = new THREE.ConeGeometry(0.15, 0.25, 7);
+  private stripSpikeGeo = new THREE.ConeGeometry(0.22, 0.72, 6);
   private ridgeGeo: THREE.ExtrudeGeometry;
 
   // 🥕 엽기토끼 맞춤 지오메트리 & 머티리얼 (당근, 두루마리 휴지, 미니 뚫어뻥)
   private carrotBodyGeo = new THREE.ConeGeometry(0.24, 0.72, 14);
   private carrotLeafGeo = new THREE.CapsuleGeometry(0.045, 0.22, 6, 8);
-  private tissueOuterGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.88, 20);
-  private tissueInnerGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.9, 16);
-  private plungerCupGeo = new THREE.CylinderGeometry(0.24, 0.08, 0.2, 14);
-  private plungerStickGeo = new THREE.CylinderGeometry(0.038, 0.038, 0.65, 10);
 
   // materials
   /** Floor tile: single material + vertex colours (was 6-material boxes + 2 strips = 8 drawcalls -> 1) */
@@ -165,9 +185,11 @@ export class World {
   private matPanel = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.2 });
   private matBlock = new THREE.MeshStandardMaterial({ roughness: 0.5 });
   private matSpike = new THREE.MeshStandardMaterial({ roughness: 0.4, flatShading: true });
+  private matSpikeBase = new THREE.MeshStandardMaterial({ roughness: 0.72 });
   private matPlatform = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.2 });
   private matStrip = new THREE.MeshBasicMaterial();
   private matStripA = new THREE.MeshBasicMaterial();
+  private matDepthGrid = new THREE.LineBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
   private matBuilding = new THREE.MeshStandardMaterial({ roughness: 1 });
   private matOrb = new THREE.MeshBasicMaterial();
   private matOrbGlow = new THREE.MeshBasicMaterial({
@@ -182,18 +204,6 @@ export class World {
     emissive: 0x15803d,
     emissiveIntensity: 0.25,
   });
-  private matTissueOuter = new THREE.MeshStandardMaterial({
-    color: 0xfafafa,
-    roughness: 0.85,
-  });
-  private matTissueCore = new THREE.MeshStandardMaterial({
-    color: 0x8d5b4c,
-    roughness: 0.9,
-  });
-  private matPlungerStick = new THREE.MeshStandardMaterial({
-    color: 0xd4a373,
-    roughness: 0.6,
-  });
   private lineWall = new THREE.LineBasicMaterial();
   private lineBlock = new THREE.LineBasicMaterial();
   private linePlat = new THREE.LineBasicMaterial();
@@ -202,18 +212,34 @@ export class World {
   // ☀️ 카툰 배경용 머티리얼
   private matSun = new THREE.MeshBasicMaterial({ color: 0xffd166 });
   private matCloud = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, transparent: true, opacity: 0.95 });
-  private matHillFar = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.85 });
-  private matHillNear = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.8 });
-  private matTrunk = new THREE.MeshStandardMaterial({ color: 0x825432, roughness: 0.8 });
-  private matCanopy = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.55 });
+  private matHillFar = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 1, flatShading: true });
+  private matHillNear = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.9, flatShading: true });
+  private matTrunk = new THREE.MeshStandardMaterial({ color: 0x825432, roughness: 0.9, flatShading: true });
+  private matCanopy = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.82, flatShading: true });
+  private matRoof = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.7, flatShading: true });
+  private matPorcelain = new THREE.MeshStandardMaterial({ color: 0xf5fbff, roughness: 0.28 });
+  private matBathroomWall = new THREE.MeshStandardMaterial({ color: 0xa8e4f1, roughness: 0.72 });
+  private matMirrorFrame = new THREE.MeshStandardMaterial({ color: 0x0096c7, roughness: 0.36 });
+  private matMirror = new THREE.MeshStandardMaterial({ color: 0xc9f3f5, metalness: 0.4, roughness: 0.24 });
+  private matSoapBubble = new THREE.MeshBasicMaterial({ color: 0xb8f7ff, transparent: true, opacity: 0.42, depthWrite: false });
+  private lineBathroom = new THREE.LineBasicMaterial({ color: 0x377993 });
+  private toyBaseMats: THREE.MeshStandardMaterial[] = [];
+  private toyTrimMats: THREE.MeshStandardMaterial[] = [];
 
   private tiles: THREE.Group[] = [];
+  private tileWorldIndices = new Int32Array(POOL).fill(-2147483648);
+  private depthGrid!: THREE.LineSegments;
+  private gridStart = Number.NaN;
+  private gridPitCount = 0;
   private sun!: THREE.Group;
   private clouds: { obj: THREE.Group; base: number; speed: number }[] = [];
   private hills: { obj: THREE.Group; base: number }[] = [];
   private trees: { obj: THREE.Group; base: number }[] = [];
   private toyBuildings: { obj: THREE.Group; base: number }[] = [];
-  private warpRings: { mesh: THREE.Mesh; rotSpeed: number; pulseSpeed: number; baseScale: number }[] = [];
+  private bathroomProps: { obj: THREE.Group; base: number }[] = [];
+  private biomeProps: BiomeProp[] = [];
+  private moon!: THREE.Group;
+  private warpRings: { mesh: THREE.Mesh; material: THREE.MeshBasicMaterial; rotSpeed: number; pulseSpeed: number; baseScale: number }[] = [];
   private starField!: THREE.Points;
   private orbFree: Orb[] = [];
 
@@ -222,8 +248,22 @@ export class World {
   private from: Palette;
   private to: Palette;
   private themeT = 1;
+  private activeThemeName = 'CARROT MEADOW';
   private tmp = new THREE.Color();
+  private readonly tileTintScratch = {
+    stone: new THREE.Color('#d8cfc4'),
+    clayDark: new THREE.Color(),
+    clayLight: new THREE.Color(),
+    whiteFlower: new THREE.Color('#ffffff'),
+    yellowCenter: new THREE.Color('#facc15'),
+    pinkFlower: new THREE.Color('#fb7185'),
+    orangeFlower: new THREE.Color('#fb923c'),
+  };
   paletteDirty = true;
+
+  get themeName() {
+    return this.activeThemeName;
+  }
 
   constructor() {
     const shape = new THREE.Shape();
@@ -260,6 +300,17 @@ export class World {
   // ---- theme ---------------------------------------------------------------
 
   setTheme(theme: Theme, instant = false) {
+    this.activeThemeName = theme.name;
+    // The authored scene art owns the horizon; hide the old one-size-fits-all skyline.
+    this.sun.visible = false;
+    this.moon.visible = false;
+    this.starField.visible = false;
+    for (const cloud of this.clouds) cloud.obj.visible = false;
+    for (const hill of this.hills) hill.obj.visible = false;
+    for (const tree of this.trees) tree.obj.visible = false;
+    for (const building of this.toyBuildings) building.obj.visible = false;
+    for (const prop of this.bathroomProps) prop.obj.visible = false;
+    for (const prop of this.biomeProps) prop.obj.visible = prop.theme === theme.name;
     this.from = clonePalette(this.cur);
     this.to = makePalette(theme);
     this.themeT = instant ? 1 : 0;
@@ -271,7 +322,7 @@ export class World {
 
   private applyPalette(p: Palette) {
     const t = this.tmp;
-    this.retintTiles(p.floorA, p.floorB, p.floorSide, p.accent);
+    this.retintTiles(p.floorA, p.floorB, p.floorSide, p.roadA, p.roadB, p.accent);
     this.matWall.color.copy(p.wall);
     this.matWall.emissive.copy(p.wallEmis);
     this.matPanel.color.copy(p.panel);
@@ -280,6 +331,7 @@ export class World {
     this.matBlock.emissive.copy(p.block).multiplyScalar(0.45);
     this.matSpike.color.copy(p.spike);
     this.matSpike.emissive.copy(p.spike).multiplyScalar(0.5);
+    this.matSpikeBase.color.copy(p.spike).multiplyScalar(0.55);
     this.matPlatform.color.copy(p.platform);
     this.matPlatform.emissive.copy(p.platform).multiplyScalar(0.45);
     this.matStrip.color.copy(p.accent2);
@@ -288,11 +340,35 @@ export class World {
     this.matBuilding.emissive.copy(p.building).multiplyScalar(0.5);
     this.matOrb.color.copy(p.orb);
     this.matOrbGlow.color.copy(p.orb);
-    this.lineWall.color.copy(p.accent2);
-    this.lineBlock.color.copy(t.copy(p.block).lerp(WHITE, 0.6));
+    this.lineWall.color.copy(p.wall).multiplyScalar(0.34);
+    this.lineBlock.color.copy(t.copy(p.block).multiplyScalar(0.32));
     this.linePlat.color.copy(p.accent);
     this.lineBuilding.color.copy(p.accent2);
     this.lineCube.color.copy(p.cube);
+    this.matDepthGrid.color.copy(p.accent2);
+    this.matSun.color.copy(p.accent);
+    this.matHillFar.color.copy(p.floorA).lerp(p.sky2, 0.52);
+    this.matHillNear.color.copy(p.floorA).lerp(p.sky2, 0.15);
+    this.matCanopy.color.copy(p.floorA).multiplyScalar(0.78);
+    this.matTrunk.color.copy(p.floorSide).multiplyScalar(0.72);
+    this.matCloud.color.copy(p.sky2).lerp(WHITE, 0.76);
+    this.matRoof.color.copy(p.accent2).lerp(p.accent, 0.22);
+    this.matMirrorFrame.color.copy(p.wall);
+    this.matMirror.color.copy(p.sky2).lerp(WHITE, 0.35);
+    this.matPorcelain.color.copy(p.sky2).lerp(p.wall, 0.2);
+    this.matBathroomWall.color.copy(p.sky2).lerp(p.wall, 0.58);
+    this.lineBathroom.color.copy(p.wall).multiplyScalar(0.55);
+    for (let i = 0; i < this.warpRings.length; i++) {
+      const ring = this.warpRings[i];
+      ring.material.color.copy(p.accent).lerp(p.accent2, i * 0.18);
+      ring.material.opacity = 0.2 - i * 0.025;
+    }
+    const night = this.activeThemeName === 'MOONLIGHT PICNIC';
+    for (let i = 0; i < this.toyBaseMats.length; i++) {
+      const base = this.toyBaseMats[i].color.setHex(TOY_COLORS[i]).lerp(p.wall, night ? 0.58 : 0.24);
+      if (night) base.multiplyScalar(0.7);
+      this.toyTrimMats[i].color.copy(base).multiplyScalar(0.68);
+    }
     this.paletteDirty = true;
   }
 
@@ -332,16 +408,7 @@ export class World {
       parts.push({ geo: grass, role: 2 });
     }
 
-    // 5. 절벽 잔디 드리움 톱니 (Grass Fringe) - 2D 절벽면에 빈틈없이 밀착
-    for (let fi = 0; fi < 3; fi++) {
-      const fx = -TILE / 2 + (fi + 0.5) * (TILE / 3);
-      const fw = TILE / 3.1;
-      const fh = 0.35 + ((fi % 2) * 0.18);
-      const fringe = new THREE.ConeGeometry(fw * 0.5, fh, 3);
-      fringe.rotateZ(Math.PI);
-      fringe.translate(fx, -fh * 0.45, FLOOR_HALF - 0.02);
-      parts.push({ geo: fringe, role: 2 });
-    }
+    // 5. [제거됨] 절벽 잔디 드리움 톱니 (시인성 확보 및 가시 오인 방지)
 
     // 6. 절벽 흙 속 돌멩이 (Cliff Pebbles)
     const pebble1 = new THREE.BoxGeometry(0.28, 0.20, 0.14);
@@ -349,6 +416,18 @@ export class World {
     const pebble2 = new THREE.BoxGeometry(0.35, 0.24, 0.14);
     pebble2.translate(0.42, -2.1, FLOOR_HALF - 0.02);
     parts.push({ geo: pebble1, role: 4 }, { geo: pebble2, role: 4 });
+
+    // Thin clay layers break up the large exposed face without adding draw calls.
+    for (const [depth, thickness, role] of [
+      [-0.72, 0.11, 9],
+      [-1.75, 0.17, 10],
+      [-3.18, 0.10, 9],
+      [-4.65, 0.2, 10],
+    ] as const) {
+      const seam = new THREE.BoxGeometry(TILE, thickness, 0.035);
+      seam.translate(0, depth, FLOOR_HALF + 0.022);
+      parts.push({ geo: seam, role });
+    }
 
     // 7. 트랙 양옆 잔디 갓길의 풍성한 들꽃 군락 (썸네일과 동일한 야생 데이지 & 튤립 화단)
     const flowerPatterns = [
@@ -380,6 +459,7 @@ export class World {
     const pos = new Float32Array(vTotal * 3);
     const nor = new Float32Array(vTotal * 3);
     const col = new Float32Array(vTotal * 3);
+    const roles = new Uint8Array(vTotal);
     const idx = new Uint32Array(iTotal);
 
     let vo = 0;
@@ -405,6 +485,7 @@ export class World {
         if (item.isTopGrass) {
           role = n.getY(i) > 0.5 ? 2 : 0;
         }
+        roles[vo + i] = role;
         col[(vo + i) * 3] = role;
         col[(vo + i) * 3 + 1] = role;
         col[(vo + i) * 3 + 2] = role;
@@ -420,42 +501,36 @@ export class World {
     out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
     out.setAttribute('color', new THREE.BufferAttribute(col, 3));
     out.setIndex(new THREE.BufferAttribute(idx, 1));
+    out.userData.roles = roles;
     out.computeBoundingSphere();
     return out;
   }
 
   /** Recompute vertex colours from the palette on theme change */
-  private retintTiles(floorA: THREE.Color, floorB: THREE.Color, side: THREE.Color, accent: THREE.Color) {
-    const pairs: [THREE.BufferGeometry, THREE.Color][] = [
-      [this.tileGeoA, floorA],
-      [this.tileGeoB, floorB],
-    ];
-    // 도로 런웨이 전용 따뜻한 황금 흙길 색상
-    const roadColor = new THREE.Color('#fef08a');
-    const roadColorB = new THREE.Color('#fde047');
+  private retintTiles(floorA: THREE.Color, floorB: THREE.Color, side: THREE.Color, roadA: THREE.Color, roadB: THREE.Color, accent: THREE.Color) {
+    const { stone, clayDark, clayLight, whiteFlower, yellowCenter, pinkFlower, orangeFlower } = this.tileTintScratch;
+    clayDark.copy(side).multiplyScalar(0.62);
+    clayLight.copy(side).lerp(accent, 0.22);
 
-    // 디테일 장식 컬러 팔레트
-    const stoneColor = new THREE.Color('#d8cfc4');
-    const whiteFlower = new THREE.Color('#ffffff');
-    const yellowCenter = new THREE.Color('#facc15');
-    const pinkFlower = new THREE.Color('#fb7185');
-    const orangeFlower = new THREE.Color('#fb923c');
-
-    for (let pIdx = 0; pIdx < pairs.length; pIdx++) {
-      const [geo, grassColor] = pairs[pIdx];
-      const activeRoad = pIdx === 0 ? roadColor : roadColorB;
+    for (let pIdx = 0; pIdx < 2; pIdx++) {
+      const geo = pIdx === 0 ? this.tileGeoA : this.tileGeoB;
+      const grassColor = pIdx === 0 ? floorA : floorB;
+      const activeRoad = pIdx === 0 ? roadA : roadB;
       const attr = geo.getAttribute('color') as THREE.BufferAttribute;
+      const roles = geo.userData.roles as Uint8Array;
       for (let i = 0; i < attr.count; i++) {
-        const role = Math.round(attr.getX(i));
+        const role = roles[i];
         let c = side;
         if (role === 1) c = accent; // 선명한 차선 마커
         else if (role === 2) c = grassColor; // 싱그러운 잔디
         else if (role === 3) c = activeRoad; // 흙길 런웨이
-        else if (role === 4) c = stoneColor; // 절벽 돌멩이
+        else if (role === 4) c = stone; // 절벽 돌멩이
         else if (role === 5) c = whiteFlower; // 하얀 데이지
         else if (role === 6) c = yellowCenter; // 노란 꽃술
         else if (role === 7) c = pinkFlower; // 핑크 튤립
         else if (role === 8) c = orangeFlower; // 주황 야생화
+        else if (role === 9) c = clayDark;
+        else if (role === 10) c = clayLight;
         attr.setXYZ(i, c.r, c.g, c.b);
       }
       attr.needsUpdate = true;
@@ -473,48 +548,63 @@ export class World {
       this.root.add(g);
       this.tiles.push(g);
     }
+
+    // One shared draw call; floor-only segments leave real pits visually open.
+    const gridGeo = new THREE.BufferGeometry();
+    const gridPositions = new THREE.BufferAttribute(new Float32Array(POOL * 5 * 2 * 3), 3);
+    gridPositions.setUsage(THREE.DynamicDrawUsage);
+    gridGeo.setAttribute('position', gridPositions);
+    gridGeo.setDrawRange(0, 0);
+    this.depthGrid = new THREE.LineSegments(gridGeo, this.matDepthGrid);
+    this.depthGrid.visible = false;
+    this.root.add(this.depthGrid);
   }
 
   private buildBackdrop() {
-    const sphereGeo = new THREE.SphereGeometry(1, 14, 10);
+    const sphereGeo = new THREE.IcosahedronGeometry(1, 1);
 
-    // 1. ☀️ 방긋 웃는 해님 (Smiling Sun)
+    // A clean, layered sun mark keeps the sky playful without competing with the runner.
     const sunGroup = new THREE.Group();
     const sunMesh = new THREE.Mesh(new THREE.CircleGeometry(3.6, 32), this.matSun);
     sunGroup.add(sunMesh);
-
-    // 12가닥의 햇살
-    for (let i = 0; i < 12; i++) {
-      const ray = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 8), this.matSun);
-      const ang = (i * Math.PI * 2) / 12;
-      ray.position.set(Math.cos(ang) * 4.4, Math.sin(ang) * 4.4, 0);
-      ray.rotation.z = ang - Math.PI / 2;
+    const sunHalo = new THREE.Mesh(
+      new THREE.TorusGeometry(4.15, 0.12, 7, 48),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.58 }),
+    );
+    sunHalo.position.z = -0.02;
+    sunGroup.add(sunHalo);
+    for (let i = 0; i < 8; i++) {
+      const ray = new THREE.Mesh(this.boxGeo, this.matSun);
+      const angle = (i * Math.PI * 2) / 8;
+      ray.scale.set(0.11, 0.64, 0.08);
+      ray.position.set(Math.cos(angle) * 4.95, Math.sin(angle) * 4.95, -0.04);
+      ray.rotation.z = angle;
       sunGroup.add(ray);
     }
-
-    // 깜찍한 카툰 눈 & 핑크 볼터치
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x332211 });
-    const eyeL = new THREE.Mesh(this.boxGeo, eyeMat);
-    eyeL.scale.set(0.18, 0.45, 0.1);
-    eyeL.position.set(-1.1, 0.4, 0.1);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 1.1;
-
-    const pinkMat = new THREE.MeshBasicMaterial({ color: 0xff8fa3 });
-    const cheekL = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), pinkMat);
-    cheekL.position.set(-1.6, -0.4, 0.1);
-    const cheekR = cheekL.clone();
-    cheekR.position.x = 1.6;
-    sunGroup.add(eyeL, eyeR, cheekL, cheekR);
 
     sunGroup.position.set(0, 24, -65);
     this.root.add(sunGroup);
     this.sun = sunGroup;
 
+    // Cut-out crescent geometry lets the active sky colour show through the moon.
+    const crescentShape = new THREE.Shape();
+    crescentShape.absarc(0, 0, 3.55, 0, Math.PI * 2, false);
+    const crescentCutout = new THREE.Path();
+    crescentCutout.absarc(1.3, 0.2, 3.22, 0, Math.PI * 2, true);
+    crescentShape.holes.push(crescentCutout);
+    const moonGroup = new THREE.Group();
+    const moon = new THREE.Mesh(new THREE.ShapeGeometry(crescentShape, 28), this.matSun);
+    moon.material = new THREE.MeshBasicMaterial({ color: 0xdce8ff, side: THREE.DoubleSide });
+    moonGroup.add(moon);
+    moonGroup.position.set(0, 24, -65);
+    moonGroup.visible = false;
+    this.root.add(moonGroup);
+    this.moon = moonGroup;
+
     // 2. ☁️ 둥실둥실 솜사탕 구름 (Fluffy Clouds)
     for (let i = 0; i < CLOUD_N; i++) {
       const cg = new THREE.Group();
-      const parts = 3 + Math.floor(this.random() * 2);
+      const parts = 2 + Math.floor(this.random() * 2);
       for (let p = 0; p < parts; p++) {
         const m = new THREE.Mesh(sphereGeo, this.matCloud);
         const r = this.rnd(1.4, 2.8);
@@ -533,7 +623,7 @@ export class World {
       const isFar = i % 2 === 0;
       const mat = isFar ? this.matHillFar : this.matHillNear;
       const radius = isFar ? this.rnd(16, 26) : this.rnd(9, 16);
-      const hill = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.2, 24, 16), mat);
+      const hill = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 1.2, 1), mat);
       hill.position.y = -radius * 0.45;
       hill.scale.set(1.6, 0.75, 1.2);
       hg.add(hill);
@@ -542,7 +632,7 @@ export class World {
       this.hills.push({ obj: hg, base: (i / HILL_N) * HILL_SPAN });
     }
 
-    // 4. 🌳 아기자기한 카툰 브로콜리 나무 (Trees)
+    // 4. Faceted canopy trees for the garden and park biomes.
     for (let i = 0; i < TREE_N; i++) {
       const tg = new THREE.Group();
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 2.6, 10), this.matTrunk);
@@ -570,31 +660,26 @@ export class World {
     }
 
     // 5. 🏙️ 썸네일 싱크로율 100% 알록달록 토이 시티 블록 타워들 (Toy City Towers)
-    const toyColors = [
-      0x38bdf8, // 스카이블루
-      0xf97316, // 오렌지
-      0xec4899, // 핑크
-      0xfacc15, // 레고 옐로우
-      0x22c55e, // 에메랄드
-      0xa855f7, // 퍼플
-      0x06b6d4, // 사이언
-    ];
+    const blockMats = TOY_COLORS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.62 }));
+    const trimMats = TOY_COLORS.map((color) => new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color).multiplyScalar(0.68), roughness: 0.58,
+    }));
+    this.toyBaseMats = blockMats;
+    this.toyTrimMats = trimMats;
     const windowMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 });
 
     for (let i = 0; i < TOY_CITY_N; i++) {
       const tg = new THREE.Group();
-      // 4~8층의 높고 웅장한 레고 블록 스카이라인
-      const stories = 4 + Math.floor(this.random() * 5);
+      // A consistent body colour gives each toy tower a readable silhouette.
+      const stories = 2 + Math.floor(this.random() * 2);
       const bWidth = this.rnd(3.2, 5.2);
       const bDepth = this.rnd(3.2, 4.8);
+      const colourIndex = i % TOY_COLORS.length;
       let curY = 0;
 
       for (let s = 0; s < stories; s++) {
         const floorH = this.rnd(1.8, 2.5);
-        const colHex = toyColors[(i * 2 + s) % toyColors.length];
-        const blockMat = new THREE.MeshStandardMaterial({ color: colHex, roughness: 0.32 });
-        const block = new THREE.Mesh(this.boxGeo, blockMat);
+        const block = new THREE.Mesh(this.boxGeo, s === 1 ? trimMats[colourIndex] : blockMats[colourIndex]);
         block.scale.set(bWidth * (1 - s * 0.06), floorH, bDepth * (1 - s * 0.06));
         block.position.y = curY + floorH / 2;
         tg.add(block);
@@ -612,40 +697,106 @@ export class World {
 
       // 꼭대기 뾰족한 레드 피라미드 지붕
       if (this.random() < 0.8) {
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(bWidth * 0.52, 2.8, 4), roofMat);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(bWidth * 0.52, 2.8, 4), this.matRoof);
         roof.rotation.y = Math.PI / 4;
         roof.position.y = curY + 1.4;
         tg.add(roof);
       }
 
       // 썸네일처럼 Z: -16 ~ -36(구릉 앞쪽/중간)에 배치하여 2D에서도 언덕 위로 선명하게 돌출
-      const zPos = -this.rnd(16, 36);
+      const zPos = -this.rnd(14, 28);
       tg.position.set(0, -0.5, zPos);
       this.root.add(tg);
       this.toyBuildings.push({ obj: tg, base: (i / TOY_CITY_N) * TOY_CITY_SPAN });
     }
 
-    // 6. 🌀 거대한 회전하는 차원 관문 링들 (Colossal Warp Rings)
-    const ringGeo = new THREE.TorusGeometry(14, 0.65, 16, 48);
-    const ringColors = [0x38bdf8, 0xec4899, 0xfacc15];
+    // Bathroom Escape replaces the outdoor props with toy sinks and mirrors.
+    const faucetGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.75, 10);
+    const bubbleGeo = new THREE.SphereGeometry(1, 12, 8);
+    const tileLinePositions: number[] = [];
+    for (let x = -1.36; x <= 1.37; x += 0.68) {
+      tileLinePositions.push(x, 0, -0.62, x, 8.2, -0.62);
+    }
+    for (let y = 0; y <= 8.21; y += 1.36) {
+      tileLinePositions.push(-2.05, y, -0.62, 2.05, y, -0.62);
+    }
+    const tileLineGeo = new THREE.BufferGeometry();
+    tileLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(tileLinePositions, 3));
+    for (let i = 0; i < BATHROOM_PROP_N; i++) {
+      const prop = new THREE.Group();
+      const wall = new THREE.Mesh(this.boxGeo, this.matBathroomWall);
+      wall.scale.set(4.1, 8.2, 0.32);
+      wall.position.set(0, 4.1, -0.8);
+      prop.add(wall);
+      const wallEdge = new THREE.LineSegments(this.edgeGeo, this.lineBathroom);
+      wallEdge.scale.copy(wall.scale);
+      wallEdge.position.copy(wall.position);
+      prop.add(wallEdge);
+      prop.add(new THREE.LineSegments(tileLineGeo, this.lineBathroom));
+      for (const seamY of [2.6, 5.3]) {
+        const seam = new THREE.Mesh(this.boxGeo, this.matMirrorFrame);
+        seam.scale.set(4.12, 0.07, 0.34);
+        seam.position.set(0, seamY, -0.61);
+        prop.add(seam);
+      }
+      const frame = new THREE.Mesh(this.boxGeo, this.matMirrorFrame);
+      frame.scale.set(2.7, 3.4, 0.3);
+      frame.position.set(0, 6.1, -0.45);
+      const glass = new THREE.Mesh(this.boxGeo, this.matMirror);
+      glass.scale.set(2.3, 3, 0.09);
+      glass.position.set(0, 6.1, -0.25);
+      const basin = new THREE.Mesh(this.boxGeo, this.matPorcelain);
+      basin.scale.set(3.2, 0.55, 1.65);
+      basin.position.y = 2.6;
+      const pedestal = new THREE.Mesh(this.boxGeo, this.matPorcelain);
+      pedestal.scale.set(0.7, 2.3, 0.72);
+      pedestal.position.y = 1.15;
+      const basinEdge = new THREE.LineSegments(this.edgeGeo, this.lineBathroom);
+      basinEdge.scale.copy(basin.scale);
+      basinEdge.position.copy(basin.position);
+      const pedestalEdge = new THREE.LineSegments(this.edgeGeo, this.lineBathroom);
+      pedestalEdge.scale.copy(pedestal.scale);
+      pedestalEdge.position.copy(pedestal.position);
+      const faucet = new THREE.Mesh(faucetGeo, this.matMirrorFrame);
+      faucet.position.set(0, 3.22, -0.3);
+      const spout = new THREE.Mesh(faucetGeo, this.matMirrorFrame);
+      spout.rotation.z = Math.PI / 2;
+      spout.position.set(0.27, 3.55, -0.3);
+      prop.add(frame, glass, basin, basinEdge, pedestal, pedestalEdge, faucet, spout);
+      for (let b = 0; b < 2; b++) {
+        const bubble = new THREE.Mesh(bubbleGeo, this.matSoapBubble);
+        const s = 0.35 + b * 0.19;
+        bubble.scale.setScalar(s);
+        bubble.position.set((b === 0 ? -1 : 1) * 1.8, 5.6 + b * 1.8, 0.4);
+        prop.add(bubble);
+      }
+      prop.position.set(0, -0.5, -this.rnd(15, 24));
+      prop.visible = false;
+      this.root.add(prop);
+      this.bathroomProps.push({ obj: prop, base: (i / BATHROOM_PROP_N) * BATHROOM_PROP_SPAN });
+    }
+
+    // 6. Subtle, theme-tinted rift arcs sit behind the playable lane.
+    const ringGeo = new THREE.TorusGeometry(10.5, 0.34, 8, 36);
     for (let i = 0; i < 3; i++) {
       const ringMat = new THREE.MeshBasicMaterial({
-        color: ringColors[i],
+        color: 0x38bdf8,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.12,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.position.set((i - 1) * 35, 26 + i * 4, -85 - i * 15);
+      ringMesh.position.set((i - 1) * 35, 25 + i * 4, -100 - i * 15);
       ringMesh.rotation.x = Math.PI * 0.15;
       ringMesh.rotation.y = (i * Math.PI) / 3;
       this.root.add(ringMesh);
       this.warpRings.push({
         mesh: ringMesh,
+        material: ringMat,
         rotSpeed: 0.18 + i * 0.08,
         pulseSpeed: 1.5 + i * 0.4,
-        baseScale: 1 + i * 0.25,
+        baseScale: 0.72 + i * 0.18,
       });
     }
 
@@ -668,6 +819,152 @@ export class World {
     });
     this.starField = new THREE.Points(starGeo, starMat);
     this.root.add(this.starField);
+    this.buildBiomeProps();
+  }
+
+  private buildBiomeProps() {
+    const sphere = new THREE.IcosahedronGeometry(1, 1);
+    const cone = new THREE.ConeGeometry(1, 1, 7, 1);
+    const post = new THREE.CylinderGeometry(0.11, 0.16, 1, 7);
+    const candyDisc = new THREE.CylinderGeometry(0.78, 0.78, 0.3, 10);
+    const candyRing = new THREE.TorusGeometry(0.62, 0.075, 6, 18);
+    const archGeo = new THREE.TorusGeometry(1.8, 0.24, 7, 20, Math.PI);
+    const lanternGlow = new THREE.IcosahedronGeometry(0.3, 1);
+
+    const add = (
+      group: THREE.Group,
+      geometry: THREE.BufferGeometry,
+      material: THREE.Material,
+      x: number,
+      y: number,
+      z: number,
+      sx = 1,
+      sy = 1,
+      sz = 1,
+      rotationZ = 0,
+    ) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(x, y, z);
+      mesh.scale.set(sx, sy, sz);
+      mesh.rotation.z = rotationZ;
+      group.add(mesh);
+      return mesh;
+    };
+
+    const prop = (
+      theme: string,
+      index: number,
+      count: number,
+      z: number,
+      build: (group: THREE.Group) => void,
+      baseOffset = 0,
+    ) => {
+      const group = new THREE.Group();
+      group.position.set(0, -0.32, z);
+      group.visible = theme === this.activeThemeName;
+      build(group);
+      this.root.add(group);
+      this.biomeProps.push({ obj: group, base: (index / count) * BIOME_PROP_SPAN + baseOffset, theme });
+    };
+
+    // Carrot Meadow: crop beds and small farm landmarks replace the generic skyline.
+    for (let i = 0; i < 3; i++) {
+      prop('CARROT MEADOW', i, 3, -17, (group) => {
+        add(group, this.boxGeo, this.matTrunk, 0, 0, 0, 5.4, 0.34, 1.9);
+        add(group, this.boxGeo, this.matCanopy, 0, 0.2, 0, 5.2, 0.11, 1.7);
+        for (const x of [-1.45, 0, 1.45]) {
+          add(group, this.carrotBodyGeo, this.matOrb, x, 0.68, 0, 0.72, 0.82, 0.72, Math.PI);
+          add(group, this.carrotLeafGeo, this.matLeaf, x - 0.1, 1.15, 0, 1, 1.5, 1, -0.32);
+          add(group, this.carrotLeafGeo, this.matLeaf, x + 0.12, 1.15, 0, 1, 1.25, 1, 0.3);
+        }
+      });
+    }
+    for (let i = 0; i < 2; i++) {
+      prop('CARROT MEADOW', i, 2, -18, (group) => {
+        add(group, post, this.matTrunk, 0, 2.35, 0, 1, 5.1, 1);
+        add(group, sphere, this.matRoof, 0, 4.9, 0, 0.28, 0.28, 0.28);
+        for (let blade = 0; blade < 4; blade++) {
+          const angle = blade * Math.PI / 2;
+          add(group, this.boxGeo, this.matRoof, Math.cos(angle) * 0.92, 4.9 + Math.sin(angle) * 0.92, 0, 0.28, 1.9, 0.12, angle);
+        }
+      });
+    }
+    prop('CARROT MEADOW', 0, 1, -18, (group) => {
+      add(group, this.boxGeo, this.matCanopy, 0, 1.05, 0, 6.2, 2.1, 2.6);
+      add(group, cone, this.matRoof, 0, 2.9, 0, 3.7, 2.0, 1.8);
+      for (const x of [-1.55, 0, 1.55]) add(group, this.boxGeo, this.matMirror, x, 1.25, 1.34, 1.1, 1.15, 0.07);
+    });
+
+    // Cotton Candy: faceted sweets, floating gumdrops, and open candy arches.
+    for (let i = 0; i < 6; i++) {
+      prop('COTTON CANDY', i, 6, -17, (group) => {
+        add(group, post, this.matTrunk, 0, 1.35, 0, 0.62, 3.0, 0.62);
+        add(group, candyDisc, this.matRoof, 0, 3.15, 0, 1.0, 0.8, 1.0);
+        add(group, candyRing, this.matPanel, 0, 3.18, 0.16, 1, 1, 1);
+      }, BIOME_PROP_SPAN / 12);
+    }
+    for (let i = 0; i < 4; i++) {
+      prop('COTTON CANDY', i, 4, -18, (group) => {
+        for (let puff = 0; puff < 3; puff++) {
+          add(group, sphere, this.matCloud, (puff - 1) * 1.2, 1.6 + (puff === 1 ? 0.45 : 0), 0, 1.15, 1.35, 1.05);
+        }
+        add(group, cone, this.matRoof, 0, 3.05, 0, 1.1, 1.45, 1.1);
+      }, BIOME_PROP_SPAN * 0.125);
+    }
+    for (let i = 0; i < 2; i++) {
+      prop('COTTON CANDY', i, 2, -18, (group) => {
+        const arch = add(group, archGeo, this.matPanel, 0, 3.3, 0, 1, 1, 1);
+        arch.rotation.x = Math.PI / 2;
+        add(group, post, this.matRoof, -1.8, 1.7, 0, 1, 3.2, 1);
+        add(group, post, this.matRoof, 1.8, 1.7, 0, 1, 3.2, 1);
+      });
+    }
+
+    // Sunny Park: furniture and lamps give the zone a human-scale park silhouette.
+    for (let i = 0; i < 4; i++) {
+      prop('SUNNY PARK', i, 4, -17, (group) => {
+        add(group, this.boxGeo, this.matTrunk, 0, 0.82, 0, 2.5, 0.2, 0.72);
+        add(group, this.boxGeo, this.matTrunk, 0, 1.55, -0.26, 2.5, 0.2, 0.18);
+        for (const x of [-0.95, 0.95]) add(group, post, this.matBuilding, x, 0.38, 0, 0.7, 0.9, 0.7);
+      });
+    }
+    for (let i = 0; i < 3; i++) {
+      prop('SUNNY PARK', i, 3, -17, (group) => {
+        add(group, post, this.matBuilding, 0, 2.25, 0, 0.58, 4.8, 0.58);
+        add(group, this.boxGeo, this.matTrunk, 0, 4.7, 0, 1.2, 0.16, 0.62);
+        add(group, sphere, this.matOrbGlow, 0, 4.35, 0, 0.36, 0.4, 0.36);
+      });
+    }
+    for (let i = 0; i < 4; i++) {
+      prop('SUNNY PARK', i, 4, -17, (group) => {
+        add(group, this.boxGeo, this.matTrunk, 0, 0.12, 0, 3.8, 0.28, 1.35);
+        for (const x of [-1.25, 0, 1.25]) add(group, sphere, this.matRoof, x, 0.55, 0, 0.22, 0.3, 0.22);
+      });
+    }
+
+    // Moonlight Picnic: layered pines, warm lanterns, and quiet campsite silhouettes.
+    for (let i = 0; i < 6; i++) {
+      prop('MOONLIGHT PICNIC', i, 6, -17, (group) => {
+        add(group, post, this.matTrunk, 0, 0.75, 0, 0.8, 1.6, 0.8);
+        add(group, cone, this.matCanopy, 0, 1.45, 0, 1.7, 2.5, 1.7);
+        add(group, cone, this.matHillFar, 0, 2.55, 0, 1.25, 2.1, 1.25);
+        add(group, cone, this.matCanopy, 0, 3.45, 0, 0.8, 1.7, 0.8);
+      });
+    }
+    for (let i = 0; i < 4; i++) {
+      prop('MOONLIGHT PICNIC', i, 4, -17, (group) => {
+        add(group, post, this.matBuilding, 0, 1.3, 0, 0.38, 2.8, 0.38);
+        add(group, this.boxGeo, this.matRoof, 0, 2.65, 0, 0.95, 0.15, 0.75);
+        add(group, lanternGlow, this.matOrbGlow, 0, 2.25, 0, 1.1, 1.1, 1.1);
+      });
+    }
+    for (let i = 0; i < 2; i++) {
+      prop('MOONLIGHT PICNIC', i, 2, -17, (group) => {
+        add(group, this.boxGeo, this.matPanel, 0, 0.16, 0, 3.8, 0.12, 2.4);
+        add(group, this.boxGeo, this.matTrunk, 0, 1.0, 0, 1.5, 0.18, 0.75);
+        for (const x of [-0.55, 0.55]) add(group, post, this.matBuilding, x, 0.55, 0, 0.5, 0.9, 0.5);
+      });
+    }
   }
 
   // ---- queries -------------------------------------------------------------
@@ -686,7 +983,15 @@ export class World {
     for (const p of this.portals) this.disposePortal(p);
     this.portals.length = 0;
     this.hints.length = 0;
+    this.addHint(
+      0,
+      32,
+      'dimensionPrimer',
+      'Try a dimension shift: press SPACE to enter 3D, steer with ▲ / W or ▼ / S, then press SPACE to return.',
+      '🌀',
+    );
     this.pitTiles.clear();
+    this.gridStart = Number.NaN;
     this.nextX = 46;
     this.patternCount = 0;
     this.sinceVault = 0;
@@ -726,11 +1031,36 @@ export class World {
     // tiles
     const j0 = Math.floor(playerX / TILE) - 14;
     for (let j = j0; j < j0 + POOL; j++) {
-      const tile = this.tiles[mod(j, POOL)];
+      const tileSlot = mod(j, POOL);
+      const tile = this.tiles[tileSlot];
+      if (this.tileWorldIndices[tileSlot] !== j) {
+        tile.position.x = j * TILE + TILE / 2;
+        this.tileWorldIndices[tileSlot] = j;
+      }
       const vis = j >= FLOOR_MIN && !this.pitTiles.has(j);
-      tile.visible = vis;
-      if (vis) tile.position.x = j * TILE + TILE / 2;
+      if (tile.visible !== vis) tile.visible = vis;
     }
+    if (this.gridStart !== j0 || this.gridPitCount !== this.pitTiles.size) {
+      const gridAttr = this.depthGrid.geometry.getAttribute('position') as THREE.BufferAttribute;
+      let vertex = 0;
+      for (let j = j0; j < j0 + POOL; j++) {
+        if (j < FLOOR_MIN || this.pitTiles.has(j)) continue;
+        const x = j * TILE;
+        gridAttr.setXYZ(vertex++, x + TILE / 2, 0.095, -4.8);
+        gridAttr.setXYZ(vertex++, x + TILE / 2, 0.095, 4.8);
+        for (const z of [-4, -2, 2, 4]) {
+          gridAttr.setXYZ(vertex++, x, 0.095, z);
+          gridAttr.setXYZ(vertex++, x + TILE, 0.095, z);
+        }
+      }
+      this.depthGrid.geometry.setDrawRange(0, vertex);
+      this.depthGrid.geometry.computeBoundingSphere();
+      gridAttr.needsUpdate = true;
+      this.gridStart = j0;
+      this.gridPitCount = this.pitTiles.size;
+    }
+    this.depthGrid.visible = e > 0.03;
+    this.matDepthGrid.opacity = e * 0.28;
 
     // obstacles (paper-flat in 2D, extruded in 3D)
     const k = lerp(0.06, 1, e);
@@ -768,7 +1098,7 @@ export class World {
     }
 
     // ☀️ 카툰 패럴랙스 애니메이션 (해님, 뭉게구름, 겹겹이 산맥, 숲)
-    if (this.sun) {
+    if (this.sun?.visible) {
       this.sun.position.x = camX + 18;
       this.sun.rotation.z = t * 0.12;
       const pulse = 1 + Math.sin(t * 2.2) * 0.035;
@@ -780,11 +1110,21 @@ export class World {
     for (const h of this.hills) {
       h.obj.position.x = camX + mod(h.base - camX * 0.42, HILL_SPAN) - HILL_SPAN / 2;
     }
-    for (const tr of this.trees) {
-      tr.obj.position.x = camX + mod(tr.base - camX * 0.95, TREE_SPAN) - TREE_SPAN / 2;
+    if (this.activeThemeName === 'BATHROOM ESCAPE') {
+      for (const prop of this.bathroomProps) {
+        prop.obj.position.x = camX + mod(prop.base - camX * 0.64, BATHROOM_PROP_SPAN) - BATHROOM_PROP_SPAN / 2;
+      }
+    } else {
+      for (const tr of this.trees) {
+        tr.obj.position.x = camX + mod(tr.base - camX * 0.95, TREE_SPAN) - TREE_SPAN / 2;
+      }
+      for (const b of this.toyBuildings) {
+        b.obj.position.x = camX + mod(b.base - camX * 0.58, TOY_CITY_SPAN) - TOY_CITY_SPAN / 2;
+      }
     }
-    for (const b of this.toyBuildings) {
-      b.obj.position.x = camX + mod(b.base - camX * 0.58, TOY_CITY_SPAN) - TOY_CITY_SPAN / 2;
+
+    for (const prop of this.biomeProps) {
+      prop.obj.position.x = camX + mod(prop.base - camX * 0.68, BIOME_PROP_SPAN) - BIOME_PROP_SPAN / 2;
     }
 
     // 🌀 차원 관문 링 & 성운 별무리 회전/패럴랙스
@@ -794,6 +1134,7 @@ export class World {
       r.mesh.position.x = camX * 0.92 + (i - 1) * 38;
       const s = r.baseScale * (1 + Math.sin(t * r.pulseSpeed) * 0.04);
       r.mesh.scale.set(s, s, s);
+      r.material.opacity = (0.02 + e * 0.105) * (1 - i * 0.08);
     }
     if (this.starField) {
       this.starField.position.x = camX * 0.96;
@@ -857,7 +1198,10 @@ export class World {
       ['hop', dist > 160 ? 2.2 : 0],
       ['lowBeams', dist > 90 ? 2.4 : 0],
     ];
-    const pool = table.filter(([name, w]) => w > 0 && name !== this.lastPattern);
+    const bias = THEME_PATTERN_BIAS[this.activeThemeName] ?? {};
+    const pool = table
+      .map(([name, weight]) => [name, weight * (bias[name] ?? 1)] as [PatternName, number])
+      .filter(([name, weight]) => weight > 0 && name !== this.lastPattern);
     const total = pool.reduce((a, [, w]) => a + w, 0);
     let r = this.random() * total;
     for (const [name, w] of pool) {
@@ -1169,24 +1513,17 @@ export class World {
       g.position.set(cx, cy, cz);
       g.scale.set(sx, sy, sz);
     } else if (kind === 'wall' || kind === 'cap' || kind === 'panel') {
-      // 🎁 거대한 알록달록 장난감 선물 상자 탑 (Toy Gift Box Wall)
-      const boxMat = new THREE.MeshStandardMaterial({
-        color: kind === 'panel' ? 0x38bdf8 : 0xf472b6,
-        roughness: 0.4,
-      });
-      const ribbonMat = new THREE.MeshStandardMaterial({
-        color: 0xfef08a,
-        roughness: 0.3,
-      });
-      g.add(new THREE.Mesh(this.boxGeo, boxMat));
+      // Shared palette materials keep the gift-wall silhouette distinct in every biome.
+      g.add(new THREE.Mesh(this.boxGeo, kind === 'panel' ? this.matPanel : this.matWall));
+      g.add(new THREE.LineSegments(this.edgeGeo, this.lineWall));
 
       // 세로 리본 띠
-      const ribbonV = new THREE.Mesh(this.boxGeo, ribbonMat);
+      const ribbonV = new THREE.Mesh(this.boxGeo, this.matStripA);
       ribbonV.scale.set(0.18, 1.01, 1.01);
       g.add(ribbonV);
 
       // 가로 리본 띠
-      const ribbonH = new THREE.Mesh(this.boxGeo, ribbonMat);
+      const ribbonH = new THREE.Mesh(this.boxGeo, this.matStripA);
       ribbonH.scale.set(1.01, 0.16, 1.01);
       g.add(ribbonH);
 
@@ -1194,18 +1531,14 @@ export class World {
       g.scale.set(sx, sy, sz);
     } else if (kind === 'block') {
       // 🧱 앙증맞은 장난감 레고 블록 (Toy Lego Cube with studs)
-      const legoMat = new THREE.MeshStandardMaterial({
-        color: 0xf59e0b, // 산뜻한 레고 옐로우/오렌지
-        roughness: 0.35,
-      });
-      const cube = new THREE.Mesh(this.boxGeo, legoMat);
+      const cube = new THREE.Mesh(this.boxGeo, this.matBlock);
       g.add(cube);
+      g.add(new THREE.LineSegments(this.edgeGeo, this.lineBlock));
 
       // 상단 원형 스터드(단추) 2개
-      const studGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.16, 12);
-      const stud1 = new THREE.Mesh(studGeo, legoMat);
+      const stud1 = new THREE.Mesh(this.blockStudGeo, this.matBlock);
       stud1.position.set(-0.25, 0.55, 0);
-      const stud2 = new THREE.Mesh(studGeo, legoMat);
+      const stud2 = new THREE.Mesh(this.blockStudGeo, this.matBlock);
       stud2.position.set(0.25, 0.55, 0);
       g.add(stud1, stud2);
 
@@ -1222,42 +1555,48 @@ export class World {
       g.scale.set(sx, sy, sz);
     } else if (kind === 'spike') {
       // 🪠 엽기토끼의 미니 뚫어뻥 트랩 밭!
+      const warningPlate = new THREE.Mesh(this.boxGeo, this.matSpikeBase);
+      warningPlate.scale.set(sx, 0.24, sz);
+      warningPlate.position.y = 0.12;
+      g.add(warningPlate);
+      for (let stripe = 0; stripe < 4; stripe++) {
+        const mark = new THREE.Mesh(this.boxGeo, this.matStripA);
+        mark.scale.set(0.14, 0.025, sz * 1.01);
+        mark.position.set(-sx / 2 + (stripe + 0.5) * sx / 4, 0.25, 0);
+        g.add(mark);
+      }
       const n = Math.max(1, Math.round(sx / 0.9));
       for (let i = 0; i < n; i++) {
-        const plunger = new THREE.Group();
-        // 빨간 고무 컵
-        const cup = new THREE.Mesh(this.plungerCupGeo, this.matSpike);
-        cup.position.y = 0.1;
-        plunger.add(cup);
-        // 나무 막대 손잡이
-        const stick = new THREE.Mesh(this.plungerStickGeo, this.matPlungerStick);
-        stick.position.y = 0.45;
-        plunger.add(stick);
-
-        plunger.scale.set(sx / n * 1.1, sy * 0.9, sz);
-        plunger.position.x = (i + 0.5) * (sx / n) - sx / 2;
-        g.add(plunger);
+        const spike = new THREE.Mesh(this.stripSpikeGeo, this.matSpike);
+        spike.position.set((i + 0.5) * (sx / n) - sx / 2, 0.59, 0);
+        g.add(spike);
       }
       g.position.set(cx, y0, cz);
       zScale = 1;
-    } else {
-      // 🧻 데굴데굴 굴러오는 거대한 두루마리 휴지 롤 (Toilet Paper Roll)!
-      const roll = new THREE.Group();
-      const outer = new THREE.Mesh(this.tissueOuterGeo, this.matTissueOuter);
-      outer.rotation.z = Math.PI / 2;
-      const innerCore = new THREE.Mesh(this.tissueInnerGeo, this.matTissueCore);
-      innerCore.rotation.z = Math.PI / 2;
-      roll.add(outer, innerCore);
+    } else if (kind === 'roller') {
+      // The hint calls these moving spike balls, so keep the silhouette readable in 2D.
+      const roller = new THREE.Group();
+      roller.add(new THREE.Mesh(this.rollerCoreGeo, this.matSpike));
+      const directions: THREE.Vector3[] = [];
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        directions.push(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0));
+      }
+      directions.push(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1));
+      const up = new THREE.Vector3(0, 1, 0);
+      for (const direction of directions) {
+        const spike = new THREE.Mesh(this.rollerSpikeGeo, this.matSpike);
+        spike.position.copy(direction).multiplyScalar(0.3);
+        spike.quaternion.setFromUnitVectors(up, direction);
+        roller.add(spike);
+      }
 
-      // 휴지 엠보싱 느낌의 외곽 와이어
-      const wire = new THREE.LineSegments(new THREE.WireframeGeometry(this.tissueOuterGeo), this.lineBlock);
-      wire.rotation.z = Math.PI / 2;
-      roll.add(wire);
-
-      g.add(roll);
-      spin = roll;
+      g.add(roller);
+      spin = roller;
       g.position.set(cx, cy, cz);
       zScale = 1;
+    } else {
+      throw new Error("Unsupported obstacle kind");
     }
 
     this.root.add(g);

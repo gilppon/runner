@@ -263,9 +263,9 @@ function Pets({ save, update }: { save: SaveData; update: Updater }) {
 // ------------------------------------------------------------------- tower
 
 const floorColors: Record<PetDim, { a: string; b: string }> = {
-  '2D': { a: '#19f0ff', b: '#0d8a99' },
-  '3D': { a: '#ff5cf2', b: '#9a1c90' },
-  HYBRID: { a: '#19f0ff', b: '#ff5cf2' },
+  '2D': { a: '#a7e1d3', b: '#4b8b7e' },
+  '3D': { a: '#ffc47d', b: '#ac6247' },
+  HYBRID: { a: '#a7e1d3', b: '#ffc47d' },
 };
 
 function FloorBlock({
@@ -325,18 +325,30 @@ function TowerView({ built, justBuilt }: { built: number; justBuilt: number }) {
   }
   const list = [...floors].reverse();
   return (
-    <div className="flex flex-col items-center justify-end gap-[3px] pb-2 pr-3">
-      {list.map((f) => (
-        <FloorBlock
-          key={`${f.idx}-${f.ghost ? 'g' : 'b'}`}
-          name={f.name}
-          style={f.style}
-          ghost={f.ghost}
-          fresh={f.idx === justBuilt}
-          width={210 - Math.min(f.idx, 9) * 4}
-        />
-      ))}
-      <div className="mt-1 h-2 w-64 rounded-full bg-gradient-to-r from-cyan-400/50 via-white/30 to-fuchsia-400/50 blur-[2px]" />
+    <div
+      className="relative flex min-h-[190px] w-full flex-1 flex-col items-center justify-end overflow-hidden rounded-lg pb-2 pr-3"
+      style={{ background: 'linear-gradient(180deg, rgba(202, 229, 211, 0.055), rgba(15, 31, 39, 0.18))' }}
+    >
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 240 190" fill="none" aria-hidden="true">
+        <path d="M55 174V67l65-39 65 39v107" fill="rgba(167,225,211,0.035)" stroke="rgba(167,225,211,0.27)" strokeWidth="1.5" />
+        <path d="M67 77h106M67 99h106M67 121h106M67 143h106" stroke="rgba(255,196,125,0.22)" strokeWidth="1" strokeDasharray="4 5" />
+        <path d="M120 31v141M55 67h130M55 174h130" stroke="rgba(255,255,255,0.16)" strokeWidth="1" />
+        <path d="m105 41 15-9 15 9M49 174h142" stroke="rgba(255,196,125,0.38)" strokeWidth="2" />
+        <circle cx="120" cy="26" r="3" fill="#ffc47d" />
+      </svg>
+      <div className="relative z-10 flex flex-col items-center justify-end gap-[3px]">
+        {list.map((f) => (
+          <FloorBlock
+            key={`${f.idx}-${f.ghost ? 'g' : 'b'}`}
+            name={f.name}
+            style={f.style}
+            ghost={f.ghost}
+            fresh={f.idx === justBuilt}
+            width={210 - Math.min(f.idx, 9) * 4}
+          />
+        ))}
+      </div>
+      <div className="relative z-10 mt-1 h-2 w-64 rounded-full bg-gradient-to-r from-emerald-300/50 via-white/25 to-amber-300/60 blur-[2px]" />
     </div>
   );
 }
@@ -372,7 +384,7 @@ function Tower({ save, update }: { save: SaveData; update: Updater }) {
   const can = !done && save.shards >= cost;
 
   return (
-    <div className="grid gap-4 md:grid-cols-[260px_1fr]">
+    <div className="grid gap-4 md:grid-cols-[260px_1fr] md:items-start">
       <div className="glass flex min-h-[260px] flex-col items-center justify-end rounded-xl p-4">
         <div className="mb-3 self-start text-xs font-bold tracking-widest text-white/60">
           HEIGHT · {built + 1} {built === 0 ? 'FLOOR' : 'FLOORS'}

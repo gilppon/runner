@@ -1,5 +1,6 @@
 import { petById } from '../game/content';
 import { dailyStatus, nextMilestone, upcomingMilestone, type Milestone, type SaveData } from '../game/save';
+import type { RunnerChallenge } from '../game/share';
 
 function Key({ children }: { children: React.ReactNode }) {
   return <span className="keycap mx-0.5 align-middle">{children}</span>;
@@ -13,8 +14,12 @@ function msProgress(s: SaveData, milestone: Milestone): number {
 export function Title({
   save,
   busy,
+  challenge,
+  challengeIsTodayGateTrial,
   muted,
+  platformMuted,
   onPlay,
+  onGateTrial,
   onHub,
   onMute,
   onClaimDaily,
@@ -22,8 +27,12 @@ export function Title({
 }: {
   save: SaveData;
   busy: boolean;
+  challenge: RunnerChallenge | null;
+  challengeIsTodayGateTrial: boolean;
   muted: boolean;
+  platformMuted: boolean;
   onPlay: () => void;
+  onGateTrial: () => void;
   onHub: () => void;
   onMute: () => void;
   onClaimDaily: () => void;
@@ -35,12 +44,16 @@ export function Title({
   const nextMs = upcomingMilestone(save);
   return (
     <div className="scroll-thin absolute inset-0 z-10 overflow-y-auto">
-      <div className="flex min-h-full flex-col items-center justify-start px-4 pb-4 pt-6 text-center sm:pt-5">
+      <div className="title-screen-layout flex min-h-full flex-col items-center justify-start px-4 pb-5 pt-16 text-center sm:pt-14">
       <div className="absolute right-3 top-3 flex flex-wrap items-center justify-end gap-2 sm:right-5 sm:top-5">
         <button
           onClick={onClaimDaily}
           disabled={!daily.available}
-          title="Daily check-in reward"
+          title={
+            daily.available
+              ? 'Claim once per local calendar day; resets at your local midnight.'
+              : 'Claimed for today; available again after your local midnight.'
+          }
           className={`glass flex items-center gap-1 rounded-full px-3 py-1.5 font-display text-xs font-bold transition ${
             daily.available ? 'anim-pulse-ring text-cyan-200' : 'cursor-default text-white/40'
           }`}
@@ -64,17 +77,39 @@ export function Title({
           ◆ {save.shards.toLocaleString('en-US')}
         </div>
         <button
+          disabled={platformMuted}
           onClick={(e) => {
             e.currentTarget.blur();
             onMute();
           }}
-          aria-label="Toggle sound"
-          className="glass flex h-9 w-9 items-center justify-center rounded-full text-lg"
+          aria-label={platformMuted ? 'Sound muted by platform settings' : 'Toggle sound'}
+          className="glass flex h-9 w-9 items-center justify-center rounded-full text-lg disabled:cursor-not-allowed disabled:opacity-60"
         >
           {muted ? '🔇' : '🔊'}
         </button>
       </div>
 
+      {challenge && (
+        <section className="mb-3 w-full max-w-[37rem] rounded-2xl border border-amber-300/70 bg-slate-950/90 px-3 py-2 text-center text-amber-100 shadow-xl">
+          <div className="text-[10px] font-black tracking-widest text-amber-300 sm:text-xs">
+            {challenge.mode === 'gateTrial'
+              ? challengeIsTodayGateTrial ? 'TODAY’S GATE TRIAL' : 'PAST GATE TRIAL ROUTE'
+              : 'FRIEND’S DIMENSION SHIFT RUN'}
+          </div>
+          <div className="mt-0.5 text-xs font-bold sm:text-sm">
+            {challenge.score.toLocaleString('en-US')} points · {challenge.distance}m · 🥕 {challenge.orbs} · 🌀 {challenge.gates}
+          </div>
+          <p className="mt-0.5 text-[10px] leading-snug text-amber-100/80 sm:text-[11px]">
+            {challenge.mode === 'gateTrial'
+              ? `${challengeIsTodayGateTrial ? 'Today’s fixed course' : 'Earlier daily course'} · enter one gate and reach 250m. Current perks apply.`
+              : challenge.seed === undefined
+                ? 'Score target only · this older link has no saved course.'
+                : 'Same course and score target. Your current perks and upgrades apply.'}
+          </p>
+        </section>
+      )}
+
+      <div className="title-hero relative w-full max-w-[37rem] rounded-[1.7rem] px-5 pb-5 pt-5 sm:px-8 sm:pb-6 sm:pt-6">
       <div className="mb-2 font-display text-[0.65rem] tracking-[0.5em] text-cyan-200/85 sm:mb-3 sm:text-xs">
         MULTI-DIMENSIONAL RUNNER
       </div>
@@ -88,7 +123,10 @@ export function Title({
       </div>
 
       <p className="mt-2 max-w-lg text-sm font-bold leading-snug text-white/90 drop-shadow sm:mt-3 sm:text-base">
-        Shift between 2D runner & 3D obstacle city! Press <Key>SPACE</Key> to walk around giant walls.
+        Jump and slide in 2D, then shift into 3D to steer around walls.
+        <span className="mt-1 block text-xs font-semibold text-cyan-100/90 sm:text-sm">
+          Keyboard: ▲ / ▼ + <Key>SPACE</Key> · Touch: use the on-screen ▲ / ▼ / SHIFT controls.
+        </span>
       </p>
 
       <div className="mt-4 flex flex-col items-center gap-3 sm:mt-6 sm:flex-row">
@@ -97,11 +135,27 @@ export function Title({
           onClick={onPlay}
           className="btn btn-primary anim-pulse-ring px-12 py-4 text-xl sm:text-2xl shadow-2xl"
         >
-          🥕 PLAY RUN!
+          {challenge
+            ? challenge.mode === 'gateTrial'
+              ? challengeIsTodayGateTrial ? '🌀 RUN TODAY’S TRIAL' : '🌀 RUN PAST TRIAL'
+              : '🥕 RACE THIS SCORE'
+            : '🥕 PLAY RUN!'}
         </button>
         <button onClick={onHub} className="btn btn-ghost px-6 py-3.5 text-sm sm:text-base">
           🏠 Carrot Village · Pets & Upgrades
         </button>
+      </div>
+
+      {!(challenge?.mode === 'gateTrial' && challengeIsTodayGateTrial) && (
+        <button
+          disabled={busy}
+          onClick={onGateTrial}
+          className="mt-3 rounded-full border border-cyan-200/40 bg-slate-950/65 px-5 py-2 text-xs font-black tracking-wide text-cyan-100 shadow-lg backdrop-blur transition hover:bg-slate-900/85 disabled:opacity-50"
+          title="All players share today’s UTC route; your current pet and upgrade bonuses still apply."
+        >
+          🌀 TODAY'S GATE TRIAL · 1 GATE + 250m
+        </button>
+      )}
       </div>
 
       <div className="mt-4 flex flex-wrap justify-center gap-2 max-w-2xl sm:mt-5">
@@ -116,7 +170,7 @@ export function Title({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs font-bold tracking-[0.2em] text-white/70 sm:mt-6">
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 rounded-full border border-white/20 bg-slate-950/75 px-4 py-2 text-xs font-bold tracking-[0.15em] text-white shadow-lg backdrop-blur sm:mt-5">
         <span>BEST SCORE {save.best.toLocaleString('en-US')}</span>
         <span>FARTHEST {save.bestDist.toLocaleString('en-US')} m</span>
         <span>RUNS {save.runs}</span>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Dimension Shift Runner bunny</title>
+  <defs>
+    <linearGradient id="back" x2="1" y2="1">
+      <stop stop-color="#092a3d"/>
+      <stop offset="1" stop-color="#352052"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="url(#back)"/>
+  <path d="M24 24C4 39 4 87 29 105" fill="none" stroke="#20e6f3" stroke-width="8" stroke-linecap="round"/>
+  <path d="M104 21c24 23 24 65 0 88" fill="none" stroke="#ee56dc" stroke-width="8" stroke-linecap="round"/>
+  <path d="M37 82 25 37" fill="none" stroke="#aa7051" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="22" cy="31" rx="12" ry="7" transform="rotate(-15 22 31)" fill="#e93b64" stroke="#8e1c48" stroke-width="2"/>
+  <ellipse cx="54" cy="43" rx="11" ry="27" transform="rotate(-12 54 43)" fill="#f9fcff" stroke="#63778a" stroke-width="2"/>
+  <ellipse cx="79" cy="39" rx="11" ry="29" transform="rotate(11 79 39)" fill="#f9fcff" stroke="#63778a" stroke-width="2"/>
+  <ellipse cx="54" cy="40" rx="4" ry="17" transform="rotate(-12 54 40)" fill="#ff9db4"/>
+  <ellipse cx="79" cy="37" rx="4" ry="18" transform="rotate(11 79 37)" fill="#ff9db4"/>
+  <circle cx="66" cy="82" r="31" fill="#f9fcff" stroke="#63778a" stroke-width="3"/>
+  <ellipse cx="52" cy="76" rx="5" ry="7" fill="#152638"/>
+  <ellipse cx="81" cy="76" rx="5" ry="7" fill="#152638"/>
+  <circle cx="54" cy="73" r="2" fill="#fff"/>
+  <circle cx="83" cy="73" r="2" fill="#fff"/>
+  <ellipse cx="66" cy="88" rx="5" ry="4" fill="#ec7194"/>
+  <path d="M60 94q6 8 12 0" fill="none" stroke="#644356" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="43" cy="88" r="5" fill="#f6acc1" opacity=".7"/>
+  <circle cx="89" cy="88" r="5" fill="#f6acc1" opacity=".7"/>
+</svg>

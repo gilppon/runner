@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { Tweener, damp, ease, lerp } from './tween';
+import { Tweener, clamp, damp, ease, lerp } from './tween';
 
 /**
  * Camera rig that blends a true orthographic side-scroller camera (2D)
- * into a perspective top-down camera (3D) using a "dolly zoom":
+ * into an angled perspective depth camera (3D) using a "dolly zoom":
  *   - the visible height at the focus point is tweened,
  *   - the field-of-view is tweened geometrically (4° ≈ orthographic -> 50°),
  *   - the camera distance is derived so the framing never pops,
- *   - the pitch rotates 0° -> 78° around the focus point.
+ *   - the pitch rotates 0° -> 34° around the focus point.
  * At rest in 2D the real OrthographicCamera renders; during/after a shift the
  * PerspectiveCamera takes over at the exact matching frame.
  */
@@ -15,6 +15,7 @@ export const CAM = {
   H2: 17, // visible height (world units) in 2D
   H3: 14.5, // visible height in 3D
   MIN_W: 27, // minimum visible width, keeps portrait screens playable
+  PORTRAIT_MIN_W: 23, // larger runner on narrow displays
   FOV2: 4,
   FOV3: 56,
   PITCH3: (34 * Math.PI) / 180, // 34도 쾌적한 3인칭 체이스 런 앵글 (Talking Tom Gold Run 스타일!)
@@ -77,7 +78,9 @@ export class CameraRig {
     else if (this.p > this.target) this.p = Math.max(this.target, this.p - step);
     const e = (this.e = ease.inOutCubic(this.p));
 
-    const minH = CAM.MIN_W / this.aspect;
+    const portrait = clamp((0.72 - this.aspect) / 0.26, 0, 1);
+    const minWidth = lerp(CAM.MIN_W, CAM.PORTRAIT_MIN_W, portrait);
+    const minH = minWidth / this.aspect;
     const h2 = Math.max(CAM.H2, minH);
     const h3 = Math.max(CAM.H3, minH);
     const h = lerp(h2, h3, e);
@@ -87,7 +90,10 @@ export class CameraRig {
     const fov = Math.max(3, CAM.FOV2 * Math.pow(CAM.FOV3 / CAM.FOV2, e) + this.fovKick);
     const D = h / (2 * Math.tan((fov * Math.PI) / 360));
 
-    const rawTargetX = fx + 0.16 * h * this.aspect;
+    const visibleWidth = h * this.aspect;
+    // Keep roughly the same forward warning distance while zooming portrait views.
+    const lookAhead = Math.max(0.16, 0.66 * CAM.MIN_W / visibleWidth - 0.5);
+    const rawTargetX = fx + Math.min(0.28, lookAhead) * visibleWidth;
     if (!this.initialized) {
       this.smoothX = rawTargetX;
       this.initialized = true;

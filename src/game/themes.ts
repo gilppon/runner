@@ -5,6 +5,8 @@ export interface Theme {
   void1: string; // 3D void top
   void2: string; // 3D void bottom
   floor: string;
+  road: string;
+  side: string;
   wall: string;
   accent: string;
   accent2: string;
@@ -20,6 +22,8 @@ export const THEMES: Theme[] = [
     void1: '#1d4ed8',
     void2: '#60a5fa',
     floor: '#22c55e',
+    road: '#f8e39c',
+    side: '#a9683e',
     wall: '#f97316',
     accent: '#facc15',
     accent2: '#ec4899',
@@ -28,16 +32,18 @@ export const THEMES: Theme[] = [
   },
   {
     name: 'COTTON CANDY',
-    sky1: '#ff8fab',
-    sky2: '#ffe5ec',
-    void1: '#59203b',
-    void2: '#a34875',
-    floor: '#b54e79',
-    wall: '#70c1b3',
-    accent: '#ffe066',
-    accent2: '#b392ac',
+    sky1: '#f8a5c2',
+    sky2: '#fde8f0',
+    void1: '#4a203b',
+    void2: '#8c3f68',
+    floor: '#38bdf8',
+    road: '#fff5ea',
+    side: '#6b3f55',
+    wall: '#2dd4bf',
+    accent: '#fde047',
+    accent2: '#c084fc',
     orb: '#ff8800',
-    danger: '#ff1493',
+    danger: '#ff2255',
   },
   {
     name: 'BATHROOM ESCAPE',
@@ -46,6 +52,8 @@ export const THEMES: Theme[] = [
     void1: '#023e8a',
     void2: '#0077b6',
     floor: '#48cae4',
+    road: '#c9f3f5',
+    side: '#427c90',
     wall: '#0096c7',
     accent: '#ffb703',
     accent2: '#fb8500',
@@ -59,6 +67,8 @@ export const THEMES: Theme[] = [
     void1: '#1d3557',
     void2: '#588157',
     floor: '#606c38',
+    road: '#e7d39e',
+    side: '#806749',
     wall: '#e76f51',
     accent: '#2a9d8f',
     accent2: '#f4a261',
@@ -72,6 +82,8 @@ export const THEMES: Theme[] = [
     void1: '#0f0e26',
     void2: '#2a2040',
     floor: '#3d3460',
+    road: '#8c7db8',
+    side: '#30274e',
     wall: '#8367a8',
     accent: '#4cc9f0',
     accent2: '#f72585',

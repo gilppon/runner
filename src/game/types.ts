@@ -1,6 +1,7 @@
 // Shared types for the 2D/3D Dimension Shift Runner
 
 export type DimensionMode = '2D_Side' | '3D_TopDown';
+export type RunMode = 'runner' | 'gateTrial';
 
 /** Core dimension state described in the design spec. */
 export interface DimensionState {
@@ -12,6 +13,7 @@ export interface DimensionState {
 export interface RunConfig {
   /** Stable procedural route seed. Shared challenges reuse this value. */
   routeSeed?: number;
+  mode?: RunMode;
   maxEnergy: number;
   startEnergy: number;
   drainMul: number; // multiplier on 3D energy drain
@@ -64,6 +66,8 @@ export interface HudState {
 }
 
 export interface RunResult {
+  mode: RunMode;
+  trialCleared?: boolean;
   routeSeed: number;
   score: number;
   distance: number;
@@ -82,5 +86,5 @@ export type EngineEvent =
   | { type: 'petFound'; petId: string }
   | { type: 'hintShown'; key: string }
   | { type: 'gameover'; result: RunResult }
-  | { type: 'pause' }
+  | { type: 'pause'; reason?: 'user' | 'focus' | 'system' }
   | { type: 'error'; message: string };

@@ -6,10 +6,12 @@ import { Particles } from './effects';
 import { createPetMesh, createPlayer } from './player';
 import type { PlayerRig } from './player';
 import { THEMES } from './themes';
+import type { Theme } from './themes';
 import { audio } from './audio';
 import { petById } from './content';
 import { DEFAULT_SAVE, buildRunConfig, rollPet } from './save';
 import { Tweener, clamp, damp, ease, lerp } from './tween';
+import { biomeArtworkUrl } from './biomeArtwork';
 import type {
   DimensionMode,
   DimensionState,
@@ -117,6 +119,8 @@ const layer = (cls: string) => {
   return d;
 };
 
+const GATE_TRIAL_DISTANCE = 250;
+
 export class GameEngine {
   static supported(): boolean {
     try {
@@ -138,7 +142,7 @@ export class GameEngine {
   private petPos = new THREE.Vector3();
   private tweener = new Tweener();
   private ro: ResizeObserver;
-
+  private artPreviewTheme: Theme | null = null;
   private bg3d = layer('dim-bg-3d');
   private scan = layer('dim-scan');
   private vignette = layer('dim-vignette');
@@ -235,6 +239,16 @@ export class GameEngine {
     this.world.setTheme(THEMES[0], true);
     this.applySkyVars();
     this.toMenu();
+    // Local visual QA only; the URL parser is enabled only in Vite development mode.
+    if (import.meta.env.DEV) {
+      const previewName = new URLSearchParams(window.location.search).get('artPreview')?.replace(/-/g, ' ').toUpperCase();
+      const previewTheme = THEMES.find((theme) => theme.name === previewName);
+      if (previewTheme) {
+        this.artPreviewTheme = previewTheme;
+        this.world.setTheme(previewTheme, true);
+        this.applySkyVars();
+      }
+    }
     this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -281,6 +295,7 @@ export class GameEngine {
     this.world.setSeed(routeSeed);
     this.world.reset();
     this.world.setTheme(THEMES[0]);
+    if (this.artPreviewTheme) this.world.setTheme(this.artPreviewTheme, true);
     this.particles.clear();
     this.run = freshRun(this.cfg);
     this.lastClearedStage = 0;
@@ -288,7 +303,7 @@ export class GameEngine {
     this.p = { x: 0, y: 0, z: 0, vy: 0, vz: 0, grounded: true, coyote: 0, jumpBuf: 0 };
     this.mode = '2D_Side';
     this.dim.mode = this.mode;
-    this.rig.setTarget(false);
+    this.rig.snap(false);
     this.input = { upKey: false, upTouch: false, downKey: false, downTouch: false };
     this.grace.clear();
     this.activeHint = null;
@@ -302,11 +317,11 @@ export class GameEngine {
     this.pushHud();
   }
 
-  pause() {
+  pause(reason: 'user' | 'focus' | 'system' = 'user') {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     audio.setPaused(true);
-    this.emit({ type: 'pause' });
+    this.emit({ type: 'pause', reason });
   }
 
   resume() {
@@ -391,22 +406,24 @@ export class GameEngine {
   }
 
   private onKeyDown = (ev: KeyboardEvent) => {
-    const playing = this.state === 'playing';
+    const hasInteractiveTarget =
+      ev.target instanceof Element &&
+      Boolean(ev.target.closest('button, input, textarea, select, [role="button"], [contenteditable="true"]'));
+    if ((ev.code === 'Space' || ev.code === 'ArrowUp' || ev.code === 'ArrowDown') && !hasInteractiveTarget) {
+      ev.preventDefault();
+    }
+    if (this.state !== 'playing' || hasInteractiveTarget) return;
+
     switch (ev.code) {
       case 'Space':
-        if (playing) {
-          ev.preventDefault();
-          if (!ev.repeat) this.toggleDimension();
-        }
+        if (!ev.repeat) this.toggleDimension();
         break;
       case 'ArrowUp':
       case 'KeyW':
-        if (playing) ev.preventDefault();
         if (!ev.repeat) this.setUp('key', true);
         break;
       case 'ArrowDown':
       case 'KeyS':
-        if (playing) ev.preventDefault();
         this.input.downKey = true;
         break;
     }
@@ -427,24 +444,24 @@ export class GameEngine {
 
   private onBlur = () => {
     this.input = { upKey: false, upTouch: false, downKey: false, downTouch: false };
-    // Stop gameplay accounting when the tab or window changes inside a portal iframe
-    if (this.state === 'playing') this.pause();
+    // Pause locally on focus loss, but let portal SDKs track focus changes themselves.
+    if (this.state === 'playing') this.pause('focus');
   };
 
   private onVisibility = () => {
-    if (document.hidden) this.pause();
+    if (document.hidden) this.pause('focus');
   };
 
   private ctxLost = false;
   private duck = 0; // duck/slide progress 0-1
   private duckPrev = 0;
   private quality = 0;
-  private qCooldown = 0;
+  private qCooldownSeconds = 0;
   private frameAvg = 16;
 
   private onContextLost = (e: Event) => {
     e.preventDefault();
-    this.pause();
+    this.pause('system');
     this.ctxLost = true;
     this.emit({ type: 'error', message: 'Graphics context lost. Recovering...' });
   };
@@ -455,18 +472,18 @@ export class GameEngine {
     this.world.paletteDirty = true;
   };
 
-  /** Frame-time driven auto quality downgrade (0=best, 1=normal, 2=low) */
-  private autoQuality() {
-    if (this.qCooldown > 0) {
-      this.qCooldown -= 1;
+  /** Smoothed frame-time quality scaling; cooldowns use elapsed time so slow devices respond promptly. */
+  private autoQuality(deltaSeconds: number) {
+    if (this.qCooldownSeconds > 0) {
+      this.qCooldownSeconds = Math.max(0, this.qCooldownSeconds - deltaSeconds);
       return;
     }
     if (this.frameAvg > 26 && this.quality < 2) {
       this.quality++;
-      this.qCooldown = 240;
+      this.qCooldownSeconds = 1.5;
     } else if (this.frameAvg < 17 && this.quality > 0) {
       this.quality--;
-      this.qCooldown = 600;
+      this.qCooldownSeconds = 10;
     } else {
       return;
     }
@@ -642,13 +659,19 @@ export class GameEngine {
   private die() {
     this.state = 'dead';
     this.activeHint = null;
-    audio.gameover();
+    const trialFinished = this.cfg.mode === 'gateTrial' && this.p.x >= GATE_TRIAL_DISTANCE;
+    if (!trialFinished) {
+      audio.gameover();
+      this.rig.shake(1.3);
+    }
     audio.stopMusic();
-    this.rig.shake(1.3);
     const { run, p, cfg } = this;
+    const trialCleared = trialFinished && run.gates > 0;
     const shards = Math.floor((p.x / 45 + run.orbs * 0.6 + run.gates * 12) * cfg.shardMul);
     const contractShards = run.contractShards;
     const result: RunResult = {
+      mode: cfg.mode ?? 'runner',
+      trialCleared: cfg.mode === 'gateTrial' ? trialCleared : undefined,
       routeSeed: cfg.routeSeed ?? 0,
       score: this.score,
       distance: Math.max(0, Math.floor(p.x)),
@@ -657,7 +680,7 @@ export class GameEngine {
       contractShards,
       shards: shards + contractShards,
       petsFound: [...run.petsFound],
-      canRevive: !run.revived,
+      canRevive: !run.revived && !trialFinished,
     };
     this.pushHud();
     this.emit({ type: 'gameover', result });
@@ -867,8 +890,11 @@ export class GameEngine {
     } else if (cfg.regen2D > 0) {
       run.energy = Math.min(cfg.maxEnergy, run.energy + cfg.regen2D * dt);
     }
-
     this.world.generate(p.x, this.speed, p.x);
+    if (cfg.mode === 'gateTrial' && p.x >= GATE_TRIAL_DISTANCE) {
+      this.die();
+      return;
+    }
     this.updateHints();
 
     // dust trail
@@ -899,6 +925,7 @@ export class GameEngine {
       const urgent = remaining <= urgentWindow;
       const requiresEarlyCue =
         is3D || h.key === 'vault' || h.key === 'vaultGate' || h.key.startsWith('wall') || h.key.startsWith('slalom');
+      if (h.key === 'dimensionPrimer' && seen >= 3) continue;
       if (seen >= 3 && !h.shown && !urgent && !requiresEarlyCue) continue;
       let text = h.text;
       if (urgent) {
@@ -932,6 +959,8 @@ export class GameEngine {
         text = is3D ? 'Steer UP around the wall to enter the hidden lane.' : h.text;
       } else if (h.key === 'vaultGate') {
         text = is3D ? 'Stay in 3D and keep steering UP to the gate.' : 'Shift to 3D and steer UP to the gate.';
+      } else if (h.key === 'dimensionPrimer' && is3D) {
+        text = '3D DEPTH ACTIVE · Use ▲ / W or ▼ / S to steer; SPACE returns to 2D.';
       } else if (h.key.startsWith('spike') && is3D) {
         text = 'Shift to 2D before the full-width spikes.';
       } else if (h.key.startsWith('duck')) {
@@ -1052,6 +1081,10 @@ export class GameEngine {
   private applySkyVars() {
     const c = this.world.cur;
     const s = this.container.style;
+    if (this.container.dataset.artBiome !== this.world.themeName) {
+      this.container.dataset.artBiome = this.world.themeName;
+      s.setProperty('--biome-art', biomeArtworkUrl(this.world.themeName));
+    }
     s.setProperty('--sky1', `#${c.sky1.getHexString()}`);
     s.setProperty('--sky2', `#${c.sky2.getHexString()}`);
     s.setProperty('--void1', `#${c.void1.getHexString()}`);
@@ -1116,7 +1149,7 @@ export class GameEngine {
     this.last = now;
     if (raw > 0 && raw < 200) {
       this.frameAvg += (raw - this.frameAvg) * 0.05;
-      this.autoQuality();
+      this.autoQuality(raw / 1000);
     }
     if (this.ctxLost) return; // skip rendering while the context is lost
     this.frame(dt);

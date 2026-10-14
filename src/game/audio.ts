@@ -28,6 +28,7 @@ class AudioManager {
   private isPaused = false;
   private muted = false;
   private adMuted = false;
+  private portalMuted = false;
   private orbCombo = 0;
   private lastOrb = 0;
 
@@ -72,7 +73,7 @@ class AudioManager {
 
   private applyGain() {
     if (this.master) {
-      this.master.gain.value = this.muted || this.adMuted ? 0 : 0.8;
+      this.master.gain.value = this.muted || this.adMuted || this.portalMuted ? 0 : 0.8;
     }
   }
 
@@ -87,6 +88,11 @@ class AudioManager {
 
   setAdMuted(m: boolean) {
     this.adMuted = m;
+    this.applyGain();
+  }
+
+  setPortalMuted(m: boolean) {
+    this.portalMuted = m;
     this.applyGain();
   }
 

@@ -1,11 +1,17 @@
-import type { RunResult } from './types';
+import type { RunMode, RunResult } from './types';
 
 export interface RunnerChallenge {
+  mode: RunMode;
   seed?: number;
   score: number;
   distance: number;
   orbs: number;
   gates: number;
+}
+
+export function dailyGateTrialSeed(now = new Date()): number {
+  const utcDay = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 86_400_000);
+  return (Math.imul(utcDay, 1664525) + 1013904223) >>> 0;
 }
 
 export function readRunnerChallenge(): RunnerChallenge | null {
@@ -18,12 +24,14 @@ export function readRunnerChallenge(): RunnerChallenge | null {
   };
   const seedValue = get('seed');
   const seed = seedValue !== null && /^\d+$/.test(seedValue) ? Number(seedValue) >>> 0 : undefined;
-  return { seed, score: number('score'), distance: number('distance'), orbs: number('carrots'), gates: number('gates') };
+  const mode: RunMode = get('mode') === 'gateTrial' ? 'gateTrial' : 'runner';
+  return { mode, seed, score: number('score'), distance: number('distance'), orbs: number('carrots'), gates: number('gates') };
 }
 
 export async function createRunnerShareUrl(result: RunResult): Promise<string> {
   const params = {
     type: 'runner_challenge',
+    mode: result.mode,
     seed: String(result.routeSeed),
     score: String(result.score),
     distance: String(result.distance),

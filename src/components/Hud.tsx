@@ -30,16 +30,17 @@ export function Toasts({ toasts }: { toasts: ToastItem[] }) {
   );
 }
 
-function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function IconButton({ label, onClick, children, disabled = false }: { label: string; onClick: () => void; children: React.ReactNode; disabled?: boolean }) {
   return (
     <button
       aria-label={label}
       title={label}
+      disabled={disabled}
       onClick={(e) => {
         e.currentTarget.blur();
         onClick();
       }}
-      className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg border border-white/25 bg-black/40 text-base text-white backdrop-blur transition hover:bg-white/15 sm:h-10 sm:w-10"
+      className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg border border-white/25 bg-black/40 text-base text-white backdrop-blur transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-black/40 sm:h-10 sm:w-10"
     >
       {children}
     </button>
@@ -49,12 +50,14 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
 export function Hud({
   hud,
   muted,
+  platformMuted,
   onPause,
   onMute,
   engineRef,
 }: {
   hud: HudState;
   muted: boolean;
+  platformMuted: boolean;
   onPause: () => void;
   onMute: () => void;
   engineRef: RefObject<GameEngine | null>;
@@ -125,24 +128,25 @@ export function Hud({
         </div>
 
         <div className="flex flex-col items-center gap-1">
-          <div className="glass flex overflow-hidden rounded-full text-[0.5rem] font-black tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">
+          <div className="glass flex whitespace-nowrap overflow-hidden rounded-full text-[0.48rem] font-black tracking-[0.04em] sm:text-xs sm:tracking-[0.18em]">
             <span
-              className={`px-2 py-1.5 font-display transition-colors sm:px-3 ${
+              className={`px-1.5 py-1.5 font-display transition-colors sm:px-3 ${
                 !is3D ? 'bg-cyan-300 text-slate-900' : 'text-white/40'
               }`}
             >
-              2D SIDE-SCROLL
+              2D SIDE
             </span>
             <span
-              className={`px-2 py-1.5 font-display transition-colors sm:px-3 ${
+              className={`px-1.5 py-1.5 font-display transition-colors sm:px-3 ${
                 is3D ? 'bg-fuchsia-400 text-slate-900' : 'text-white/40'
               }`}
             >
-              3D TOP-DOWN
+              3D DEPTH
             </span>
           </div>
-          <div className="text-center font-display text-[0.5rem] tracking-[0.18em] text-white/60 sm:text-[0.6rem] sm:tracking-[0.25em]">
-            ZONE {hud.zone} · {hud.zoneName}
+          <div className="whitespace-nowrap rounded-full bg-slate-950/60 px-2 py-0.5 text-center font-display text-[0.52rem] tracking-[0.12em] text-white/85 sm:text-[0.6rem] sm:tracking-[0.18em]">
+            <span className="sm:hidden">ZONE {hud.zone}</span>
+            <span className="hidden sm:inline">ZONE {hud.zone} · {hud.zoneName}</span>
           </div>
         </div>
 
@@ -155,7 +159,11 @@ export function Hud({
             ))}
           </div>
           <div className="flex gap-2">
-            <IconButton label={muted ? 'Unmute (M)' : 'Mute (M)'} onClick={onMute}>
+            <IconButton
+              label={platformMuted ? 'Sound muted by platform settings' : muted ? 'Unmute (M)' : 'Mute (M)'}
+              disabled={platformMuted}
+              onClick={onMute}
+            >
               {muted ? '🔇' : '🔊'}
             </IconButton>
             <IconButton label="Pause (P)" onClick={onPause}>
@@ -166,8 +174,8 @@ export function Hud({
       </div>
 
       {/* energy gauge */}
-      <div className="absolute left-1/2 top-[9.6rem] w-[min(92vw,520px)] -translate-x-1/2 sm:top-[6.4rem]">
-        <div className="mb-1 flex items-end justify-between px-1 font-display text-[0.62rem] font-bold tracking-[0.2em] text-white/85 sm:text-xs">
+      <div className="absolute left-1/2 top-[9.6rem] w-[min(92vw,520px)] -translate-x-1/2 sm:top-[10.5rem] lg:top-[6.4rem]">
+        <div className="mb-1 flex items-end justify-between rounded-md border border-white/15 bg-slate-950/75 px-2 py-1 font-display text-[0.72rem] font-bold tracking-[0.14em] text-white shadow-sm backdrop-blur-sm sm:text-sm sm:tracking-[0.2em]">
           <span>DIMENSION ENERGY</span>
           <span className={low ? 'text-rose-300' : ''}>
             {Math.round(hud.energy)} / {Math.round(hud.maxEnergy)}
@@ -200,35 +208,35 @@ export function Hud({
             />
           )}
         </div>
-        <div className="mt-1.5 flex items-center justify-center gap-2 text-[0.68rem] font-bold tracking-[0.16em] sm:text-xs">
-          <span className={`keycap ${hud.canShift && !is3D ? 'anim-pulse-ring' : ''}`}>SPACE</span>
-          {is3D ? (
-            <span className="text-fuchsia-200">RETURN TO 2D · FREE · 3D DRAINS ENERGY</span>
-          ) : hud.canShift ? (
-            <span className="text-cyan-100">SHIFT TO 3D · −{Math.round(hud.shiftCost)} ENERGY</span>
-          ) : (
-            <span className="text-rose-200">NEED {Math.ceil(hud.shiftCost - hud.energy)} MORE ENERGY · GRAB ⬡ ORBS</span>
-          )}
-        </div>
+        {hud.hint ? (
+          <div
+            key={hud.hint.key}
+            role="status"
+            className={`mt-1.5 flex min-h-8 items-center justify-center gap-2 rounded-md border px-2 py-1 text-center text-xs font-bold leading-tight shadow-sm backdrop-blur-sm sm:text-sm ${
+              hud.hint.urgent
+                ? 'border-rose-300/60 bg-rose-950/85 text-rose-50'
+                : 'border-amber-300/45 bg-slate-950/80 text-amber-50'
+            }`}
+          >
+            <span className="shrink-0 text-base">{hud.hint.icon}</span>
+            <span>{hud.hint.text}</span>
+          </div>
+        ) : (
+          <div className="mt-1.5 flex items-center justify-center gap-2 rounded-md border border-white/15 bg-slate-950/75 px-2 py-1 text-[0.75rem] font-bold tracking-[0.08em] text-white shadow-sm backdrop-blur-sm sm:text-sm sm:tracking-[0.14em]">
+            <span className={`keycap ${hud.canShift && !is3D ? 'anim-pulse-ring' : ''}`}>SPACE</span>
+            {is3D ? (
+              <span className="text-fuchsia-200">RETURN TO 2D · FREE · 3D DRAINS ENERGY</span>
+            ) : hud.canShift ? (
+              <span className="text-cyan-100">SHIFT TO 3D · −{Math.round(hud.shiftCost)} ENERGY</span>
+            ) : (
+              <span className="text-rose-200">NEED {Math.ceil(hud.shiftCost - hud.energy)} MORE ENERGY · GRAB ⬡ ORBS</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* hint banner */}
-      {hud.hint && (
-        <div
-          key={hud.hint.key}
-          className={`anim-hint glass absolute left-1/2 top-[14.8rem] w-[min(92vw,640px)] rounded-xl border px-3 py-2 text-center text-xs font-bold sm:top-[11.6rem] sm:px-4 sm:text-base ${
-            hud.hint.urgent
-              ? 'animate-pulse border-rose-300 bg-rose-950/80 text-rose-50'
-              : 'border-amber-300/50 text-amber-50'
-          }`}
-        >
-          <span className="mr-2 text-lg">{hud.hint.icon}</span>
-          {hud.hint.text}
-        </div>
-      )}
-
       {/* desktop legend */}
-      <div className="absolute bottom-3 left-1/2 hidden -translate-x-1/2 items-center gap-4 rounded-full bg-black/35 px-4 py-1.5 text-[0.7rem] tracking-widest text-white/80 backdrop-blur [@media(pointer:fine)]:flex">
+      <div className="absolute bottom-3 left-1/2 hidden -translate-x-1/2 items-center gap-4 rounded-full border border-white/20 bg-black/60 px-4 py-1.5 text-xs font-semibold tracking-wide text-white shadow-lg backdrop-blur [@media(pointer:fine)]:flex">
         <span>
           <span className="keycap">SPACE</span> shift dimension
         </span>
@@ -244,12 +252,13 @@ export function Hud({
       </div>
 
       {/* touch controls */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden items-end justify-between p-4 [@media(pointer:coarse)]:flex">
+      <div className="touch-controls pointer-events-none absolute inset-x-0 bottom-0 items-end justify-between">
         <div className="flex flex-col gap-3">
           <HoldButton label="▲" sub={is3D ? 'UP' : 'JUMP'} onHold={(d) => engineRef.current?.touchUp(d)} />
           <HoldButton label="▼" sub={is3D ? 'DOWN' : 'SLIDE'} small onHold={(d) => engineRef.current?.touchDown(d)} />
         </div>
         <button
+          aria-label={is3D ? 'Switch to 2D side view' : 'Switch to 3D depth view'}
           className={`pointer-events-auto flex h-28 w-28 touch-none flex-col items-center justify-center rounded-full border-2 font-display text-xs font-black tracking-widest text-white shadow-lg active:scale-95 ${
             is3D ? 'border-fuchsia-300 bg-fuchsia-500/50' : 'border-cyan-200 bg-cyan-500/40'
           }`}
@@ -280,6 +289,7 @@ function HoldButton({
   const size = small ? 'h-16 w-24' : 'h-24 w-24';
   return (
     <button
+      aria-label={`${sub} control`}
       className={`pointer-events-auto flex ${size} touch-none flex-col items-center justify-center rounded-2xl border-2 border-white/40 bg-white/10 font-display text-xl font-black text-white backdrop-blur active:bg-white/30`}
       onPointerDown={(e) => {
         e.preventDefault();
